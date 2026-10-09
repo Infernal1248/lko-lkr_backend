@@ -4,7 +4,7 @@ Laravel 13 API для сервиса личных карточек работн�
 
 ## Локальный запуск
 
-Требуются PHP 8.4.25+, Composer, расширения curl, dom, fileinfo, gd, mbstring, zip, xml, intl, pdo_sqlite; Poppler (`pdftoppm`) для защищённого растрового предпросмотра. Для production — PostgreSQL и pdo_pgsql.
+Требуются PHP 8.4.25+, Composer, расширения curl, dom, fileinfo, GD с FreeType, mbstring, zip, xml, intl и драйвер выбранной БД (pdo_mysql для MySQL, pdo_pgsql для PostgreSQL, pdo_sqlite для SQLite). Предпросмотр формируется непосредственно в PHP GD; Poppler, внешние команды и VPS не обязательны.
 
 ```sh
 composer install
@@ -14,7 +14,7 @@ php artisan migrate
 php artisan serve --host=127.0.0.1 --port=8000
 ```
 
-Укажите `APP_URL=http://127.0.0.1:8000`. Если `pdftoppm` отсутствует в PATH, задайте абсолютный путь в `PDFTOPPM_BINARY`. Соберите соседний frontend командой `npm ci && npm run build`: он записывает результат в `public/app`. Затем откройте http://127.0.0.1:8000.
+Укажите `APP_URL=http://127.0.0.1:8000`. Соберите соседний frontend командой `npm ci && npm run build`: он записывает результат в `public/app`. Затем откройте http://127.0.0.1:8000.
 
 Для разработки Vue можно запустить его dev-сервер, который проксирует API в Laravel. API использует same-origin сессии Laravel и CSRF. Не храните токены доступа в localStorage.
 
@@ -33,7 +33,7 @@ php artisan db:seed --class=LocalDemoSeeder
 - Реквизиты организации, картотека, CSV/XLSX импорт до 500 строк (UTF-8 CSV; заголовки `фамилия;имя;отчество`). Импорт атомарный.
 - Реестр сгенерированных карточек с поиском по ФИО, пагинацией, бесплатным повторным скачиванием и удалением PDF/персональных данных.
 - Серверный PDF A5 210 × 148 мм, только чёрный текст; встроенный Liberation Serif Bold, 10–14 пт. Выход за размер строки блокирует генерацию.
-- Серверный PNG-предпросмотр с водяным знаком; исходный PDF предпросмотра удаляется в `finally` и не выдаётся клиенту.
+- Серверный PNG-предпросмотр через GD/FreeType с водяным знаком; общий с PDF расчёт координат и размеров, без запуска внешних программ и временного PDF.
 - Профили принтеров, поправки X/Y и отдельных строк, бесплатный тест с фиксированными данными.
 - Пакеты генераций, ЮKassa redirect checkout, проверяемые уведомления, журнал баланса, защита от повторной оплаты/списания одного запроса.
 - Docker PHP 8.4.25 + PostgreSQL + Nginx + scheduler.
@@ -82,6 +82,10 @@ PDF и снимок данных хранятся до удаления поль
 Публичные юридические документы ещё не утверждены: frontend содержит явно помеченную рабочую редакцию. Нужны реквизиты владельца, политика, оферта и поручение обработки. Подтверждение работодателя не подменяет необходимые согласия сотрудников.
 
 ## Развёртывание
+
+На обычном PHP-хостинге: используйте PHP 8.4+, GD с FreeType и pdo_mysql. Укажите реквизиты MySQL в `.env`, production/HTTPS-настройки и SMTP; направьте корень сайта в `public`. Выполните `php artisan config:clear`, `php artisan migrate --force`, `php artisan config:cache`, `php artisan route:cache` подходящим PHP CLI. Старую переменную `PDFTOPPM_BINARY` можно удалить: она больше не используется. Фактические расширения и работу MySQL нужно проверить на сервере хостинга.
+
+Альтернативный вариант с Docker:
 
 1. Соберите frontend. Подготовьте `.env` с новым APP_KEY, APP_URL, надёжным DB_PASSWORD, SMTP, SESSION_SECURE_COOKIE=true, APP_DEBUG=false. Для публичного домена нужен HTTPS на внешнем reverse proxy. Порты PostgreSQL и FPM не публикуются.
 2. `docker compose build && docker compose up -d db app web`.

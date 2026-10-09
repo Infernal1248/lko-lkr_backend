@@ -2,7 +2,6 @@
 
 return [
     'consent_version' => '2026-10-09.1',
-    'pdftoppm' => env('PDFTOPPM_BINARY', 'pdftoppm'),
     'templates' => [
         'ppd-lkr' => [
             'name' => 'Личная карточка работника', 'manufacturer' => 'ООО «Первый печатный двор»', 'preview_image' => 'templates/ppd-lkr.png', 'series' => 'ЛКР', 'version' => '3.0',

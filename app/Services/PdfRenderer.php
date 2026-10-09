@@ -3,9 +3,7 @@
 namespace App\Services;
 
 use Carbon\Carbon;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\Process\Process;
 
 class PdfRenderer
 {
@@ -24,7 +22,26 @@ class PdfRenderer
 
             return $pdf->Output('proof.pdf', 'S');
         }
+        foreach ($this->layout($pdf, $template, $data, $settings) as $line) {
+            $pdf->SetFont('liberationserif', 'B', $line['size'], resource_path('fonts/liberationserifb.json'));
+            $pdf->SetTextColor(0, 0, 0);
+            $pdf->SetXY($line['x'], $line['y']);
+            $pdf->Cell($line['width'], 5, $line['text'], 0, 0, 'C');
+        }
+        if ($preview) {
+            $pdf->SetFont('liberationserif', 'B', 8, resource_path('fonts/liberationserifb.json'));
+            $pdf->SetTextColor(145, 145, 145);
+            $pdf->SetXY(55, 131);
+            $pdf->Cell(30, 4, 'Предпросмотр', 0, 0, 'C');
+        }
+
+        return $pdf->Output('card.pdf', 'S');
+    }
+
+    private function layout(\TCPDF $pdf, array $template, array $data, array $settings): array
+    {
         $lines = ['surname' => $data['surname'], 'given_names' => trim($data['name'].' '.($data['patronymic'] ?? '')), 'organization_type' => $data['organization_type'], 'organization_name' => $data['organization_name'], 'director' => trim($data['director_position'].' '.$data['director_name']), 'issue_date' => ($data['issue_date'] ? Carbon::parse($data['issue_date'])->format('d.m.Y').' г.' : '')];
+        $layout = [];
         foreach ($template['fields'] as $field => [$x,$y,$width]) {
             $size = (float) $settings['font_size'];
             $text = $lines[$field];
@@ -42,18 +59,16 @@ class PdfRenderer
             if ($x < 0 || $y < 0 || $x + $width > $template['width'] || $y + 5 > $template['height']) {
                 throw ValidationException::withMessages(['settings' => 'Смещение выводит текст за пределы листа.']);
             }
-            $pdf->SetTextColor(0, 0, 0);
-            $pdf->SetXY($x, $y);
-            $pdf->Cell($width, 5, $text, 0, 0, 'C');
-        }
-        if ($preview) {
-            $pdf->SetFont('liberationserif', 'B', 8, resource_path('fonts/liberationserifb.json'));
-            $pdf->SetTextColor(145, 145, 145);
-            $pdf->SetXY(55, 131);
-            $pdf->Cell(30, 4, 'Предпросмотр', 0, 0, 'C');
+            $ascent = $pdf->getFontAscent('liberationserif', 'B', $size);
+            $descent = $pdf->getFontDescent('liberationserif', 'B', $size);
+            $height = max(5, $pdf->getCellHeight($size * 25.4 / 72));
+            $layout[] = compact('text', 'size', 'x', 'y', 'width') + [
+                'left' => $x + ($width - $pdf->GetStringWidth($text)) / 2,
+                'baseline' => $y + ($height - $ascent - $descent) / 2 + $ascent,
+            ];
         }
 
-        return $pdf->Output('card.pdf', 'S');
+        return $layout;
     }
 
     private function document(array $template): \TCPDF
@@ -104,21 +119,44 @@ class PdfRenderer
 
     public function preview(string $key, array $data, array $settings): string
     {
-        $directory = storage_path('app/private/previews/'.Str::uuid());
-        mkdir($directory, 0700, true);
+        abort_unless(extension_loaded('gd') && function_exists('imagettftext'), 503, 'Для предпросмотра включите расширение PHP GD с FreeType в панели хостинга.');
+        $template = config("cards.templates.$key");
+        abort_unless($template, 422, 'Неизвестный бланк.');
+        $pdf = $this->document($template);
+        $layout = $this->layout($pdf, $template, $data, $settings);
+        [$cropX, $cropY, $cropWidth, $cropHeight] = $template['crop'];
+        $scale = 1600 / $template['width'];
+        $image = imagecreatetruecolor((int) round($cropWidth * $scale), (int) round($cropHeight * $scale));
+        $source = imagecreatefrompng(resource_path($template['preview_image']));
         try {
-            file_put_contents($directory.'/input.pdf', $this->render($key, $data, $settings, false, true));
-            [$cropX, $cropY, $cropWidth, $cropHeight] = config("cards.templates.$key.crop");
-            $scale = 1600 / 210;
-            $process = new Process([config('cards.pdftoppm'), '-f', '1', '-singlefile', '-scale-to', '1600', '-x', (string) round($cropX * $scale), '-y', (string) round($cropY * $scale), '-W', (string) round($cropWidth * $scale), '-H', (string) round($cropHeight * $scale), '-png', $directory.'/input.pdf', $directory.'/preview']);
-            $process->setTimeout(30);
-            $process->mustRun();
+            imagefill($image, 0, 0, imagecolorallocate($image, 255, 255, 255));
+            imagecopyresampled($image, $source, (int) round(-$cropX * $scale), (int) round(-$cropY * $scale), 0, 0,
+                (int) round($template['width'] * $scale), (int) round($template['height'] * $scale), imagesx($source), imagesy($source));
+            $black = imagecolorallocate($image, 0, 0, 0);
+            foreach ($layout as $line) {
+                $pdf->SetFont('liberationserif', 'B', $line['size'], resource_path('fonts/liberationserifb.json'));
+                $x = $line['left'];
+                foreach (preg_split('//u', $line['text'], -1, PREG_SPLIT_NO_EMPTY) as $character) {
+                    imagettftext($image, $line['size'] * $scale * 25.4 / 96, 0,
+                        (int) round(($x - $cropX) * $scale), (int) round(($line['baseline'] - $cropY) * $scale),
+                        $black, resource_path('fonts/LiberationSerif-Bold.ttf'), $character);
+                    $x += $pdf->GetStringWidth($character);
+                }
+            }
+            imagettftext($image, 8 * $scale * 25.4 / 96, 0, (int) round((57 - $cropX) * $scale),
+                (int) round((134 - $cropY) * $scale), imagecolorallocate($image, 145, 145, 145),
+                resource_path('fonts/LiberationSerif-Bold.ttf'), 'Предпросмотр');
+            ob_start();
+            try {
+                imagepng($image);
 
-            return file_get_contents($directory.'/preview.png');
+                return ob_get_contents();
+            } finally {
+                ob_end_clean();
+            }
         } finally {
-            foreach (glob($directory.'/*') as $file) {
-                unlink($file);
-            } rmdir($directory);
+            imagedestroy($source);
+            imagedestroy($image);
         }
     }
 }
