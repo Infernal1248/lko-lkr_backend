@@ -47,6 +47,13 @@ class CheckHosting extends Command
             $checks['Реквизиты ЮKassa заданы'] = filled(config('cards.yookassa.shop_id')) && filled(config('cards.yookassa.secret'));
             $checks['Режим чеков задан'] = in_array(config('cards.receipt_mode'), ['npd_manual', '54fz']);
         }
+        if (config('push.enabled')) {
+            $checks['Ключи push заданы'] = filled(config('push.public_key')) && filled(config('push.private_key'));
+            $checks['OpenSSL поддерживает P-256'] = function_exists('openssl_get_curve_names') && in_array('prime256v1', openssl_get_curve_names());
+            $checks['PHP curl для push'] = extension_loaded('curl');
+            $checks['Миграция push установлена'] = Schema::hasTable('push_subscriptions');
+            $this->line('Доставку push проверьте кнопкой пробного уведомления в кабинете.');
+        }
         foreach ($checks as $name => $ok) {
             $ok ? $this->info('OK: '.$name) : $this->error('ПРОВЕРЬТЕ: '.$name);
         }

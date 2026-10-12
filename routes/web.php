@@ -6,6 +6,7 @@ use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\CardController;
 use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PushController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\RegistryController;
 use App\Http\Controllers\SupportController;
@@ -24,6 +25,10 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
     Route::get('/public-settings', fn () => ['operator_name' => config('cards.operator_name'), 'operator_inn' => config('cards.operator_inn'), 'operator_address' => config('cards.operator_address'), 'privacy_email' => config('cards.privacy_email'), 'privacy_version' => config('cards.privacy_version')]);
     Route::get('/packages', [PaymentController::class, 'packages']);
     Route::middleware('auth')->group(function () {
+        Route::get('/push/settings', [PushController::class, 'settings']);
+        Route::post('/push/subscriptions', [PushController::class, 'store'])->middleware('throttle:20,1');
+        Route::delete('/push/subscriptions', [PushController::class, 'destroy']);
+        Route::post('/push/test', [PushController::class, 'test'])->middleware('throttle:3,1');
         Route::get('/receipts', [ReceiptController::class, 'index']);
         Route::put('/receipts/{id}', [ReceiptController::class, 'update']);
         Route::get('/support', [SupportController::class, 'index']);
@@ -65,6 +70,12 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
             Route::delete('/generations/{id}', [GenerationController::class, 'destroy']);
         });
     });
+});
+Route::get('/push-sw.js', function () {
+    $file = public_path('app/push-sw.js');
+    abort_unless(is_file($file), 404);
+
+    return response()->file($file, ['Content-Type' => 'application/javascript', 'Cache-Control' => 'no-cache', 'Service-Worker-Allowed' => '/']);
 });
 Route::get('/{path?}', function () {
     $file = public_path('app/index.html');

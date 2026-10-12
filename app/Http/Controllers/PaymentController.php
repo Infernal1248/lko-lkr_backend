@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\LedgerEntry;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\PushNotifications;
 use App\Services\YooKassa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -79,7 +80,7 @@ class PaymentController extends Controller
         // Never trust webhook payload status: retrieve the payment using merchant credentials.
         $remote = $this->gateway->fetch($payment->provider_id);
         abort_unless(($remote['id'] ?? null) === $payment->provider_id && ($remote['metadata']['order_id'] ?? null) === $payment->id && ($remote['amount']['currency'] ?? null) === 'RUB' && ($remote['amount']['value'] ?? null) === number_format($payment->amount / 100, 2, '.', '') && ($remote['test'] ?? null) === ($payment->test_mode ?? config('cards.yookassa.test')), 422, 'Платёж не прошёл проверку.');
-        DB::transaction(function () use ($payment, $remote) {
+        $newlyPaid = DB::transaction(function () use ($payment, $remote) {
             $p = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
             if ($p->status === 'succeeded') {
                 return;
@@ -89,9 +90,14 @@ class PaymentController extends Controller
                 $user->increment('credits', $p->credits);
                 LedgerEntry::create(['user_id' => $user->id, 'amount' => $p->credits, 'balance' => $user->credits, 'reason' => 'purchase', 'reference' => 'payment:'.$p->id, 'created_at' => now()]);
                 $p->update(['status' => 'succeeded', 'paid_at' => now()]);
+
+                return true;
             } elseif (($remote['status'] ?? '') === 'canceled') {
                 $p->update(['status' => 'canceled']);
             }
         }, 3);
+        if ($newlyPaid) {
+            app(PushNotifications::class)->paymentSucceeded($payment->fresh());
+        }
     }
 }

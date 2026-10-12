@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PushSubscription;
 use App\Models\User;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
@@ -41,6 +42,11 @@ class AuthController extends Controller
 
     public function logout(Request $request): mixed
     {
+        $endpoint = $request->input('push_endpoint');
+        $hash = is_string($endpoint) && strlen($endpoint) <= 2048 ? hash('sha256', $endpoint) : $request->session()->get('push_endpoint_hash');
+        if ($hash) {
+            PushSubscription::where('user_id', $request->user()->id)->where('endpoint_hash', $hash)->delete();
+        }
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
@@ -64,6 +70,7 @@ class AuthController extends Controller
         $status = Password::reset($d, function (User $u, string $password) {
             $u->forceFill(['password' => Hash::make($password), 'remember_token' => Str::random(60)])->save();
             DB::table('sessions')->where('user_id', $u->id)->delete();
+            PushSubscription::where('user_id', $u->id)->delete();
             event(new PasswordReset($u));
         });
         if ($status !== Password::PasswordReset) {

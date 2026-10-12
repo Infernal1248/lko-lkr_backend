@@ -4,11 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\SupportMessage;
 use App\Models\SupportTicket;
+use App\Services\PushNotifications;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class SupportController extends Controller
 {
+    public function __construct(private PushNotifications $push) {}
+
     private function ticket(Request $r, int $id): SupportTicket
     {
         $q = SupportTicket::query();
@@ -43,19 +46,22 @@ class SupportController extends Controller
     {
         $d = $r->validate(['subject' => 'required|string|max:160', 'body' => 'required|string|max:5000']);
 
-        return DB::transaction(function () use ($r, $d) {
+        $response = DB::transaction(function () use ($r, $d) {
             $t = SupportTicket::create(['user_id' => $r->user()->id, 'subject' => $d['subject']]);
             SupportMessage::create(['ticket_id' => $t->id, 'author_id' => $r->user()->id, 'from_support' => false, 'body' => $d['body']]);
 
             return response()->json($t, 201);
         });
+        $this->push->supportMessage($response->getOriginalContent(), false, $r->user()->id);
+
+        return $response;
     }
 
     public function reply(Request $r, int $id): mixed
     {
         $d = $r->validate(['body' => 'required|string|max:5000']);
 
-        return DB::transaction(function () use ($r, $id, $d) {
+        $response = DB::transaction(function () use ($r, $id, $d) {
             $t = $this->ticket($r, $id);
             $admin = (bool) $r->user()->is_support_admin;
             $m = SupportMessage::create(['ticket_id' => $t->id, 'author_id' => $r->user()->id, 'from_support' => $admin, 'body' => $d['body']]);
@@ -63,6 +69,9 @@ class SupportController extends Controller
 
             return response()->json($m, 201);
         });
+        $this->push->supportMessage($this->ticket($r, $id), (bool) $r->user()->is_support_admin, $r->user()->id);
+
+        return $response;
     }
 
     public function close(Request $r, int $id): mixed
