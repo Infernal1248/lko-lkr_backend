@@ -30,7 +30,7 @@ class RegistryController extends Controller
         });
         $rows = $rows->take(2001)->collect();
         abort_if($rows->count() > 2000, 422, 'Выгрузка ограничена 2000 строками. Уточните поиск.');
-        $bytes = $export->$format($rows);
+        $bytes = $export->$format($rows, $r->user()->organization ?? []);
         $type = $format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
         return response($bytes, 200, ['Content-Type' => $type, 'Content-Disposition' => 'attachment; filename="registry-'.date('Y-m-d').'.'.$format.'"']);

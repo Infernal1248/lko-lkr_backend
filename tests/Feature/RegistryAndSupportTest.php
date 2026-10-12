@@ -106,6 +106,31 @@ class RegistryAndSupportTest extends TestCase
         $this->putJson('/api/generations/'.$g['id'].'/registry', ['registry' => [], 'data_rights' => true])->assertNotFound();
     }
 
+    public function test_export_matches_supplied_columns_and_leaves_optional_cells_blank(): void
+    {
+        $u = $this->account();
+        $u->update(['organization' => ['organization_type' => 'ООО ЧОО', 'organization_name' => '«Образец»']]);
+        $d = $this->payload($u);
+        $this->postJson('/api/generations', $d)->assertCreated();
+        $bytes = $this->get('/api/registry/export/xlsx')->assertOk()->getContent();
+        $file = tempnam(sys_get_temp_dir(), 'registry-template');
+        try {
+            file_put_contents($file, $bytes);
+            $book = IOFactory::load($file);
+            $sheet = $book->getActiveSheet();
+            $this->assertSame(['№ п/п', 'ФИО', 'Дата рождения', 'Место рождения', 'Наименование должности', 'Дата назначения на должность', 'Реквизиты приказа о назначение на должность', 'Серия карточки', 'Номер карточки', 'Дата выдачи карточки', 'Серия и номер удостоверения частного охранника ', 'Дата увольнения', 'Реквизиты приказа об увольнении'], $sheet->rangeToArray('A4:M4')[0]);
+            $this->assertSame('Реестр учета выдачи ЛКО и ЛКР  ООО ЧОО «Образец»', $sheet->getCell('G2')->getValue());
+            foreach (['C5', 'K5', 'L5', 'M5', 'B6'] as $cell) {
+                $this->assertEmpty($sheet->getCell($cell)->getValue());
+            }
+            $this->assertSame('thin', $sheet->getStyle('M5')->getBorders()->getRight()->getBorderStyle());
+            $this->assertSame('Times New Roman', $sheet->getStyle('B4')->getFont()->getName());
+            $book->disconnectWorksheets();
+        } finally {
+            unlink($file);
+        }
+    }
+
     public function test_export_contains_incomplete_rows_and_preserves_numbers_as_text_and_filters_owners(): void
     {
         $u = $this->account();
@@ -123,10 +148,18 @@ class RegistryAndSupportTest extends TestCase
             file_put_contents($file, $response->getContent());
             $book = IOFactory::load($file);
             $sheet = $book->getActiveSheet();
-            $this->assertSame(2, $sheet->getHighestRow());
-            $this->assertSame('000001', $sheet->getCell('H2')->getValue());
-            $this->assertSame('s', $sheet->getCell('D2')->getDataType());
-            $this->assertSame('=1+1', $sheet->getCell('D2')->getValue());
+            $this->assertSame(60, $sheet->getHighestRow());
+            $this->assertSame('M', $sheet->getHighestColumn());
+            $this->assertSame('Реквизиты приказа об увольнении', $sheet->getCell('M4')->getValue());
+            $this->assertSame('№ п/п', $sheet->getCell('A4')->getValue());
+            $this->assertSame(1, $sheet->getCell('A5')->getValue());
+            $this->assertSame('0001 № 000023', $sheet->getCell('K5')->getValue());
+            $this->assertSame('n', $sheet->getCell('C5')->getDataType());
+            $this->assertSame('02.01.1990', $sheet->getCell('C5')->getFormattedValue());
+            $this->assertSame('', $sheet->getAutoFilter()->getRange());
+            $this->assertSame('000001', $sheet->getCell('I5')->getValue());
+            $this->assertSame('s', $sheet->getCell('E5')->getDataType());
+            $this->assertSame('=1+1', $sheet->getCell('E5')->getValue());
             $book->disconnectWorksheets();
         } finally {
             unlink($file);

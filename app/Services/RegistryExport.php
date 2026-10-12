@@ -6,50 +6,81 @@ use App\Models\Generation;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class RegistryExport
 {
-    private function headings(): array
+    private function template(): Spreadsheet
     {
-        return ['ФИО работника', 'Дата рождения', 'Место рождения', 'Должность', 'Дата назначения', 'Приказ о приёме', 'Серия карточки', 'Номер карточки', 'Дата выдачи', 'Серия удостоверения охранника', 'Номер удостоверения охранника', 'Дата увольнения', 'Приказ об увольнении', 'Заполненность'];
+        return IOFactory::load(resource_path('registry/template.xlsx'));
     }
 
-    private function date(?string $s): string
+    private function title(array $organization): string
     {
-        return $s ? Carbon::parse($s)->format('d.m.Y') : '';
+        $name = trim(($organization['organization_type'] ?? '').' '.($organization['organization_name'] ?? ''));
+
+        return 'Реестр учета выдачи ЛКО и ЛКР  '.($name !== '' ? $name : 'ООО ЧОО "                     "');
     }
 
-    private function row(Generation $g): array
+    private function date(?string $value): string
+    {
+        return $value ? Carbon::parse($value)->format('d.m.Y') : '';
+    }
+
+    private function row(Generation $g, int $number): array
     {
         $d = $g->snapshot['data'] ?? [];
         $r = $g->registry ?? [];
+        $certificate = '';
+        if ($r['is_guard'] ?? false) {
+            $series = trim($r['guard_series'] ?? '');
+            $id = trim($r['guard_number'] ?? '');
+            $certificate = trim($series.($id !== '' ? ' № '.$id : ''));
+        }
 
-        return [trim(implode(' ', [$d['surname'] ?? '', $d['name'] ?? '', $d['patronymic'] ?? ''])), $this->date($r['birth_date'] ?? null), $r['birth_place'] ?? '', $r['position'] ?? '', $this->date($r['appointed_at'] ?? null), $r['hire_order'] ?? '', config('cards.templates.'.$g->template_key.'.series'), $g->card_number ?? '', $this->date($d['issue_date'] ?? null), ($r['is_guard'] ?? false) ? ($r['guard_series'] ?? '') : 'Не применяется', ($r['is_guard'] ?? false) ? ($r['guard_number'] ?? '') : 'Не применяется', $this->date($r['dismissed_at'] ?? null), $r['dismissal_order'] ?? '', $g->registry_complete ? 'Сведения заполнены' : 'Сведения неполные'];
+        return [$number, trim(implode(' ', [$d['surname'] ?? '', $d['name'] ?? '', $d['patronymic'] ?? ''])), $this->date($r['birth_date'] ?? null), $r['birth_place'] ?? '', $r['position'] ?? '', $this->date($r['appointed_at'] ?? null), $r['hire_order'] ?? '', config('cards.templates.'.$g->template_key.'.series'), $g->card_number ?? '', $this->date($d['issue_date'] ?? null), $certificate, $this->date($r['dismissed_at'] ?? null), $r['dismissal_order'] ?? ''];
     }
 
-    public function xlsx(Collection $items): string
+    public function xlsx(Collection $items, array $organization = []): string
     {
-        $book = new Spreadsheet;
+        $book = $this->template();
         $sheet = $book->getActiveSheet();
-        $sheet->setTitle('Реестр карточек');
-        $rows = [$this->headings()];
-        foreach ($items as $g) {
-            $rows[] = $this->row($g);
-        }
-        foreach ($rows as $ri => $row) {
+        $sheet->setCellValueExplicit('G2', $this->title($organization), DataType::TYPE_STRING);
+        $last = max(60, $items->count() + 4);
+        $sheet->duplicateStyle($sheet->getStyle('A5:M5'), 'A5:M'.$last);
+        // Row numbers are centred; identifiers remain literal text, including leading zeroes.
+        $sheet->getStyle('I5:I'.$last)->getNumberFormat()->setFormatCode('@');
+        $sheet->getStyle('A5:A'.$last)->getAlignment()->setHorizontal('center');
+        $sheet->getStyle('B5:M'.$last)->getAlignment()->setHorizontal('left')->setVertical('top')->setWrapText(true);
+        $sheet->getStyle('A4:M'.$last)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FF000000');
+        $metrics = app(PdfRenderer::class)->registryDocument();
+        $metrics->SetFont('liberationsans', '', 11, resource_path('fonts/liberationsans.json'));
+        foreach ($items->values() as $index => $g) {
+            $row = $this->row($g, $index + 1);
+            $height = 15;
             foreach ($row as $ci => $value) {
-                $sheet->setCellValueExplicit([$ci + 1, $ri + 1], (string) $value, DataType::TYPE_STRING);
+                $column = chr(65 + $ci);
+                $cell = $column.($index + 5);
+                if ($ci === 0) {
+                    $sheet->setCellValueExplicit($cell, $value, DataType::TYPE_NUMERIC);
+                } elseif (in_array($ci, [2, 5, 9, 11], true) && $value !== '') {
+                    $sheet->setCellValueExplicit($cell, Date::PHPToExcel(Carbon::createFromFormat('!d.m.Y', $value)), DataType::TYPE_NUMERIC);
+                    $sheet->getStyle($cell)->getNumberFormat()->setFormatCode('dd.mm.yyyy');
+                } else {
+                    $sheet->setCellValueExplicit($cell, (string) $value, DataType::TYPE_STRING);
+                }
+                $width = ($sheet->getColumnDimension($column)->getWidth() * 7 + 5) * 25.4 / 96;
+                $height = max($height, 15 * count($this->lines($metrics, (string) $value, $width)));
             }
+            $sheet->getRowDimension($index + 5)->setRowHeight($height);
         }
-        $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:N'.count($rows));
-        $sheet->getStyle('A1:N1')->getFont()->setBold(true);
-        $sheet->getStyle('A1:N'.count($rows))->getAlignment()->setWrapText(true)->setVertical('top');
-        foreach (range('A', 'N') as $col) {
-            $sheet->getColumnDimension($col)->setWidth(in_array($col, ['A', 'C', 'F', 'M']) ? 32 : 20);
-        }
+        $sheet->getPageMargins()->setLeft(10 / 25.4)->setRight(10 / 25.4)->setTop(10 / 25.4)->setBottom(10 / 25.4);
+        $sheet->getPageSetup()->setOrientation(PageSetup::ORIENTATION_LANDSCAPE)->setPaperSize(PageSetup::PAPERSIZE_A3)->setFitToWidth(1)->setFitToHeight(0)->setPrintArea('A1:M'.$last)->setRowsToRepeatAtTopByStartAndEnd(1, 4);
         ob_start();
         try {
             (new Xlsx($book))->save('php://output');
@@ -61,51 +92,109 @@ class RegistryExport
         }
     }
 
-    public function pdf(Collection $items): string
+    /** Break text using the embedded font metrics, including long unbroken identifiers. */
+    private function lines(\TCPDF $pdf, string $text, float $width): array
     {
-        $pdf = app(PdfRenderer::class)->registryDocument();
-        $pdf->SetTitle('Реестр личных карточек');
-        $pdf->SetAutoPageBreak(false, 12);
-        $pdf->SetDrawColor(130, 145, 155);
-        $pdf->SetLineWidth(0.15);
-        $pdf->setCellPaddings(1.5, 1.5, 1.5, 1.5);
-        $widths = [42, 22, 42, 30, 22, 37, 16, 27, 22, 21, 25, 22, 37, 35];
-        $page = 0;
-        $header = function () use ($pdf, $widths, &$page): void {
-            if ($page > 0) {
-                $pdf->AddPage();
+        $lines = [];
+        foreach (preg_split('/\R/u', $text) as $paragraph) {
+            $line = '';
+            foreach (preg_split('/\s+/u', trim($paragraph), -1, PREG_SPLIT_NO_EMPTY) as $word) {
+                $candidate = $line === '' ? $word : $line.' '.$word;
+                if ($pdf->GetStringWidth($candidate) <= $width - 1.5) {
+                    $line = $candidate;
+
+                    continue;
+                }
+                if ($line !== '') {
+                    $lines[] = $line;
+                    $line = '';
+                }
+                foreach (mb_str_split($word) as $character) {
+                    if ($line !== '' && $pdf->GetStringWidth($line.$character) > $width - 1.5) {
+                        $lines[] = $line;
+                        $line = '';
+                    }
+                    $line .= $character;
+                }
             }
-            $page++;
-            $pdf->SetXY(10, 10);
-            $pdf->SetFont('liberationserif', 'B', 14, resource_path('fonts/liberationserifb.json'));
-            $pdf->Cell(330, 9, 'Реестр личных карточек — '.date('d.m.Y'), 0, 0);
-            $pdf->SetFont('liberationserif', 'B', 9, resource_path('fonts/liberationserifb.json'));
-            $pdf->Cell(70, 9, 'Страница '.$page, 0, 1, 'R');
-            $pdf->SetFillColor(233, 239, 243);
-            $x = 10.0;
-            foreach ($this->headings() as $i => $heading) {
-                $pdf->MultiCell($widths[$i], 20, $heading, 1, 'L', true, 0, $x, 22, true, 0, false, true, 20, 'M');
+            $lines[] = $line;
+        }
+
+        return $lines;
+    }
+
+    private function textLines(\TCPDF $pdf, array $lines, float $x, float $y, float $width, float $lineHeight, string $align): void
+    {
+        foreach ($lines as $index => $line) {
+            $pdf->SetXY($x, $y + $index * $lineHeight);
+            $pdf->Cell($width, $lineHeight, $line, 0, 0, $align);
+        }
+    }
+
+    public function pdf(Collection $items, array $organization = []): string
+    {
+        $book = $this->template();
+        $sheet = $book->getActiveSheet();
+        $headings = $sheet->rangeToArray('A4:M4')[0];
+        $pixels = array_map(fn ($col) => $sheet->getColumnDimension($col)->getWidth() * 7 + 5, range('A', 'M'));
+        $scale = 400 / array_sum($pixels);
+        $widths = array_map(fn ($width) => $width * $scale, $pixels);
+        $book->disconnectWorksheets();
+        $pdf = app(PdfRenderer::class)->registryDocument();
+        $title = $this->title($organization);
+        $pdf->SetTitle($title);
+        $pdf->SetAutoPageBreak(false, 10);
+        $pdf->SetDrawColor(0, 0, 0);
+        $pdf->SetTextColor(0, 0, 0);
+        $pdf->SetLineWidth(0.15);
+        $pdf->setCellPaddings(.5, .1, .5, .1);
+        $bodySize = 11 * $scale / (25.4 / 96);
+        $headerSize = 14 * $scale / (25.4 / 96);
+        $bodyHeight = 20 * $scale;
+        $lineHeight = $bodySize * 25.4 / 72 * 1.18;
+        $headerLineHeight = $headerSize * 25.4 / 72 * 1.18;
+        $titleX = 10 + array_sum(array_slice($widths, 0, 6));
+        $header = function () use ($pdf, $widths, $headings, $title, $titleX, $headerSize, $bodySize, $scale, $headerLineHeight): void {
+            $pdf->SetFont('liberationserif', '', $headerSize, resource_path('fonts/liberationserif.json'));
+            $titleLines = $this->lines($pdf, $title, 410 - $titleX);
+            $titleHeight = max(25 * $scale, count($titleLines) * $headerLineHeight);
+            $this->textLines($pdf, $titleLines, $titleX, 10 + 25 * $scale, 410 - $titleX, $headerLineHeight, 'L');
+            $y = 10 + 50 * $scale + $titleHeight;
+            $cells = [];
+            foreach ($headings as $i => $text) {
+                $cells[] = $this->lines($pdf, $text, $widths[$i]);
+            }
+            $height = max(75 * $scale, max(array_map('count', $cells)) * $headerLineHeight + .4);
+            $x = 10;
+            foreach ($cells as $i => $lines) {
+                $pdf->Rect($x, $y, $widths[$i], $height);
+                $this->textLines($pdf, $lines, $x, $y + .2, $widths[$i], $headerLineHeight, 'C');
                 $x += $widths[$i];
             }
-            $pdf->SetXY(10, 42);
+            $pdf->SetFont('liberationsans', '', $bodySize, resource_path('fonts/liberationsans.json'));
+            $pdf->SetXY(10, $y + $height);
         };
         $header();
-        if ($items->isEmpty()) {
-            $pdf->Cell(400, 12, 'Нет записей', 1, 1);
+        $rows = $items->values()->map(fn ($g, $i) => $this->row($g, $i + 1));
+        // Preserve the blank ruled rows from the supplied form (rows 5–60).
+        while ($rows->count() < 56) {
+            $rows->push(array_fill(0, 13, ''));
         }
-        foreach ($items as $g) {
-            $row = array_map(fn ($value) => (string) ($value === '' ? '—' : $value), $this->row($g));
-            $height = 10.0;
+        foreach ($rows as $row) {
+            $cells = [];
             foreach ($row as $i => $text) {
-                $height = max($height, $pdf->getStringHeight($widths[$i], $text) + 2);
+                $cells[] = $this->lines($pdf, (string) $text, $widths[$i]);
             }
-            if ($pdf->GetY() + $height > 285) {
+            $height = max($bodyHeight, max(array_map('count', $cells)) * $lineHeight + .4);
+            if ($pdf->GetY() + $height > 287) {
+                $pdf->AddPage();
                 $header();
             }
-            $x = 10.0;
+            $x = 10;
             $y = $pdf->GetY();
-            foreach ($row as $i => $text) {
-                $pdf->MultiCell($widths[$i], $height, $text, 1, 'L', false, 0, $x, $y, true, 0, false, true, $height, 'T');
+            foreach ($cells as $i => $lines) {
+                $pdf->Rect($x, $y, $widths[$i], $height);
+                $this->textLines($pdf, $lines, $x, $y + .2, $widths[$i], $lineHeight, $i === 0 ? 'C' : 'L');
                 $x += $widths[$i];
             }
             $pdf->SetXY(10, $y + $height);
