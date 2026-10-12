@@ -38,6 +38,32 @@ class PdfRenderer
         return $pdf->Output('card.pdf', 'S');
     }
 
+    public function calibrationProof(string $key): string
+    {
+        $template = config("cards.templates.$key");
+        abort_unless($template, 422, 'Неизвестный бланк.');
+        $pdf = $this->document(['width' => 210, 'height' => 297]);
+        $pdf->SetTitle('Два пробных бланка А5 на листе А4');
+        foreach ([0, 148] as $top) {
+            $pdf->Image(resource_path($template['preview_image']), 0, $top, 210, 148);
+            $pdf->SetFont('liberationserif', 'B', 10, resource_path('fonts/liberationserifb.json'));
+            $pdf->SetXY(8, $top + 12);
+            $pdf->Cell(190, 5, 'ПРОБНЫЙ БЛАНК '.$template['series'].' · А5 · 210 × 148 мм', 0, 0, 'C');
+            $pdf->SetXY(8, $top + 20);
+            $pdf->Cell(190, 5, 'Печатайте на А4 в масштабе 100%. Разрежьте по пунктиру.', 0, 0, 'C');
+        }
+        $pdf->SetLineStyle(['width' => 0.25, 'dash' => '2,2', 'color' => [60, 70, 80]]);
+        $pdf->Line(0, 148, 210, 148);
+        $pdf->Line(0, 296, 210, 296);
+        // Marks remain visible on printers with non-printable edge margins.
+        foreach ([0, 148] as $top) {
+            $pdf->SetXY(8, $top + 28);
+            $pdf->Cell(190, 5, 'Высота каждого листа — 148 мм. Нижнюю полоску 1 мм удалите.', 0, 0, 'C');
+        }
+
+        return $pdf->Output('calibration-a4.pdf', 'S');
+    }
+
     private function layout(\TCPDF $pdf, array $template, array $data, array $settings): array
     {
         $lines = ['surname' => $data['surname'], 'given_names' => trim($data['name'].' '.($data['patronymic'] ?? '')), 'organization_type' => $data['organization_type'], 'organization_name' => $data['organization_name'], 'director' => trim($data['director_position'].' '.$data['director_name']), 'issue_date' => ($data['issue_date'] ? Carbon::parse($data['issue_date'])->format('d.m.Y').' г.' : '')];
@@ -85,7 +111,7 @@ class PdfRenderer
         if (! defined('K_ALLOWED_PATHS')) {
             define('K_ALLOWED_PATHS', [resource_path()]);
         }
-        $pdf = new \TCPDF('L', 'mm', [$template['width'], $template['height']], true, 'UTF-8', false);
+        $pdf = new \TCPDF($template['width'] > $template['height'] ? 'L' : 'P', 'mm', [$template['width'], $template['height']], true, 'UTF-8', false);
         $pdf->setPrintHeader(false);
         $pdf->setPrintFooter(false);
         $pdf->SetMargins(0, 0, 0);

@@ -1,12 +1,9 @@
 <?php
 
-use App\Http\Controllers\PaymentController;
 use App\Models\LedgerEntry;
-use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Str;
 
 Artisan::command('cards:demo {email} {--credits=10}', function () {
@@ -27,19 +24,3 @@ Artisan::command('cards:demo {email} {--credits=10}', function () {
     });
     $this->info('Тестовый баланс пополнен.');
 })->purpose('Локальное пополнение для проверки генерации');
-
-Artisan::command('payments:sync', function () {
-    if (! config('cards.payments_enabled')) {
-        return;
-    }
-    Payment::where('status', 'pending')->whereNotNull('provider_id')->where('created_at', '>', now()->subDays(7))->chunkById(100, function ($payments) {
-        foreach ($payments as $payment) {
-            try {
-                app(PaymentController::class)->reconcile($payment);
-            } catch (Throwable $e) {
-                report($e);
-            }
-        }
-    });
-})->purpose('Сверить незавершённые платежи с ЮKassa');
-Schedule::command('payments:sync')->everyFiveMinutes()->withoutOverlapping();

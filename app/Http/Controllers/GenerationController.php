@@ -43,7 +43,9 @@ class GenerationController extends Controller
         $request->validate(['template_key' => ['required', Rule::in(array_keys(config('cards.templates')))], 'proof' => 'boolean']);
         $s = CardInput::settings($request->input('settings', []));
 
-        return $this->pdf($this->renderer->render($request->input('template_key'), CardInput::demo(), $s, $request->boolean('proof')), 'calibration.pdf');
+        return $this->pdf($request->boolean('proof')
+            ? $this->renderer->calibrationProof($request->input('template_key'))
+            : $this->renderer->render($request->input('template_key'), CardInput::demo(), $s, false), 'calibration.pdf');
     }
 
     public function store(Request $request): mixed

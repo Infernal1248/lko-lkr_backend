@@ -53,4 +53,21 @@ class CalibrationWorkflowTest extends TestCase
         $this->getJson('/api/calibration/layout')->assertUnauthorized();
         $this->actingAs(User::factory()->create())->getJson('/api/calibration/layout')->assertOk()->assertJsonCount(6, 'fields')->assertJsonPath('fields.0.text', 'Образцов')->assertJsonPath('crop.2', 120);
     }
+
+    public function test_trial_sheet_is_a4_but_printed_data_remains_a5_and_free(): void
+    {
+        $this->actingAs($user = User::factory()->create(['credits' => 3]));
+        foreach (['ppd-lkr', 'ppd-lko'] as $key) {
+            foreach ([true => [210, 297], false => [210, 148]] as $proof => [$width, $height]) {
+                $response = $this->postJson('/api/calibration/pdf', ['template_key' => $key, 'proof' => (bool) $proof, 'settings' => $this->settings()]);
+                $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
+                preg_match('/\/MediaBox\s*\[0(?:\.0+)? 0(?:\.0+)? ([0-9.]+) ([0-9.]+)\]/', $response->getContent(), $box);
+                $this->assertCount(3, $box);
+                $this->assertEqualsWithDelta($width, (float) $box[1] * 25.4 / 72, 0.01);
+                $this->assertEqualsWithDelta($height, (float) $box[2] * 25.4 / 72, 0.01);
+            }
+        }
+        $this->assertSame(3, $user->fresh()->credits);
+        $this->assertDatabaseCount('generations', 0);
+    }
 }

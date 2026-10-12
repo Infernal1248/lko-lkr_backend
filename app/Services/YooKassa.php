@@ -8,9 +8,21 @@ use Illuminate\Support\Facades\Http;
 
 class YooKassa
 {
+    public static function ready(): bool
+    {
+        return (bool) config('cards.payments_enabled') && filled(config('cards.yookassa.shop_id')) && filled(config('cards.yookassa.secret'));
+    }
+
+    public static function unavailableMessage(): string
+    {
+        return config('cards.payments_enabled')
+            ? 'Не заполнены реквизиты магазина ЮKassa. Обратитесь в поддержку.'
+            : 'Приём платежей отключён владельцем сервиса. Обратитесь в поддержку.';
+    }
+
     private function client(): PendingRequest
     {
-        abort_unless(config('cards.payments_enabled') && config('cards.yookassa.shop_id') && config('cards.yookassa.secret'), 503, 'Приём платежей ещё не настроен.');
+        abort_unless(self::ready(), 503, self::unavailableMessage());
 
         return Http::withBasicAuth(config('cards.yookassa.shop_id'), config('cards.yookassa.secret'))->baseUrl('https://api.yookassa.ru/v3')->acceptJson()->timeout(20);
     }

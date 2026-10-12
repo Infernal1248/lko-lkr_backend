@@ -32,9 +32,9 @@ return [
     ],
     'packages' => [
         'start' => ['name' => 'Стартовый', 'credits' => 25, 'amount' => 49000],
-        'business' => ['name' => 'Рабочий', 'credits' => 100, 'amount' => 149000],
-        'volume' => ['name' => 'Расширенный', 'credits' => 300, 'amount' => 349000],
+        'standard' => ['name' => 'Рабочий', 'credits' => 50, 'amount' => (int) env('PACKAGE_50_AMOUNT', 99000)],
+        'business' => ['name' => 'Расширенный', 'credits' => 100, 'amount' => 149000],
     ],
     'payments_enabled' => (bool) env('PAYMENTS_ENABLED', false),
-    'yookassa' => ['shop_id' => env('YOOKASSA_SHOP_ID'), 'secret' => env('YOOKASSA_SECRET'), 'test' => (bool) env('YOOKASSA_TEST', true), 'vat_code' => (int) env('YOOKASSA_VAT_CODE', 1)],
+    'yookassa' => ['shop_id' => env('YOOKASSA_SHOP_ID'), 'secret' => env('YOOKASSA_SECRET_KEY') ?: env('YOOKASSA_SECRET'), 'test' => (bool) env('YOOKASSA_TEST', true), 'vat_code' => (int) env('YOOKASSA_VAT_CODE', 1)],
 ];

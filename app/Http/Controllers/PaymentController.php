@@ -17,7 +17,7 @@ class PaymentController extends Controller
 
     public function packages(): array
     {
-        return ['enabled' => config('cards.payments_enabled'), 'test' => config('cards.yookassa.test'), 'packages' => collect(config('cards.packages'))->map(fn ($p, $key) => $p + ['key' => $key])->values()];
+        return ['enabled' => YooKassa::ready(), 'unavailable_message' => YooKassa::ready() ? null : YooKassa::unavailableMessage(), 'test' => config('cards.yookassa.test'), 'packages' => collect(config('cards.packages'))->map(fn ($p, $key) => $p + ['key' => $key])->values()];
     }
 
     public function index(Request $request): mixed
@@ -28,7 +28,7 @@ class PaymentController extends Controller
     public function store(Request $request): mixed
     {
         $request->validate(['package' => ['required', Rule::in(array_keys(config('cards.packages')))], 'request_key' => 'required|uuid', 'buyer_type' => 'required|in:person,company', 'buyer_name' => 'required|string|max:180', 'buyer_inn' => ['nullable', 'required_if:buyer_type,company', 'regex:/^(?:[0-9]{10}|[0-9]{12})$/']]);
-        abort_unless(config('cards.payments_enabled'), 503, 'Приём платежей ещё не настроен.');
+        abort_unless(YooKassa::ready(), 503, YooKassa::unavailableMessage());
         $buyer = ['type' => $request->input('buyer_type'), 'name' => $request->input('buyer_name'), 'inn' => $request->input('buyer_type') === 'company' ? $request->input('buyer_inn') : null, 'email' => $request->user()->email];
         $payment = DB::transaction(function () use ($request, $buyer) {
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();

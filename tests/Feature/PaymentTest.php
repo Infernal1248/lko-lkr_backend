@@ -67,4 +67,25 @@ class PaymentTest extends TestCase
         $this->postJson('/api/payments', $data)->assertOk();
         Http::assertSentCount(1);
     }
+
+    public function test_missing_credentials_disable_checkout_before_creating_order(): void
+    {
+        config(['cards.payments_enabled' => true, 'cards.yookassa.shop_id' => 'shop', 'cards.yookassa.secret' => '']);
+        $this->getJson('/api/packages')->assertOk()->assertJsonPath('enabled', false);
+        $this->actingAs(User::factory()->create())->postJson('/api/payments', [
+            'buyer_type' => 'person', 'buyer_name' => 'Тест', 'package' => 'start', 'request_key' => (string) Str::uuid(),
+        ])->assertStatus(503);
+        $this->assertDatabaseCount('payments', 0);
+    }
+
+    public function test_fifty_card_checkout_uses_server_price_and_credits(): void
+    {
+        $this->payment();
+        $this->getJson('/api/packages')->assertOk()->assertJsonPath('enabled', true)
+            ->assertJsonPath('packages.0.credits', 25)->assertJsonPath('packages.1.credits', 50)->assertJsonPath('packages.2.credits', 100);
+        Http::fake(['api.yookassa.ru/*' => Http::response(['id' => 'fifty-payment', 'test' => true, 'confirmation' => ['confirmation_url' => 'https://yookassa.ru/test']])]);
+        $this->actingAs(User::factory()->create())->postJson('/api/payments', [
+            'buyer_type' => 'person', 'buyer_name' => 'Тест', 'package' => 'standard', 'request_key' => (string) Str::uuid(), 'credits' => 999,
+        ])->assertSuccessful()->assertJsonPath('credits', 50)->assertJsonPath('amount', config('cards.packages.standard.amount'));
+    }
 }
