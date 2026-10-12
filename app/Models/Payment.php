@@ -16,6 +16,6 @@ class Payment extends Model
 
     protected function casts(): array
     {
-        return ['credits' => 'integer', 'amount' => 'integer'];
+        return ['buyer' => 'encrypted:array', 'receipt_url' => 'encrypted', 'test_mode' => 'boolean', 'paid_at' => 'datetime', 'receipt_recorded_at' => 'datetime', 'credits' => 'integer', 'amount' => 'integer'];
     }
 }

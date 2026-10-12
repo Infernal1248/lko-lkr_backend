@@ -40,6 +40,17 @@ class CardInput
         return $validated;
     }
 
+    public static function employee(array $input): array
+    {
+        $validated = self::validate($input, true);
+        Validator::make($validated, [
+            'data.surname' => 'required|string|max:80',
+            'data.name' => 'required|string|max:80',
+        ])->validate();
+
+        return $validated;
+    }
+
     public static function settings(array $s): array
     {
         return Validator::make($s, [

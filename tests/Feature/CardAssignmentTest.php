@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Consent;
 use App\Models\Generation;
+use App\Models\PrinterProfile;
 use App\Models\User;
 use App\Services\CardInput;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,7 +26,9 @@ class CardAssignmentTest extends TestCase
 
     private function generate(string $key = 'ppd-lkr'): string
     {
-        return $this->postJson('/api/generations', ['request_key' => (string) Str::uuid(), 'template_key' => $key, 'data' => CardInput::demo(), 'settings' => ['offset_x' => 0, 'offset_y' => 0, 'font_size' => 12, 'fields' => []]])->assertCreated()->assertJsonPath('template_key', $key)->json('id');
+        $profile = PrinterProfile::create(['user_id' => auth()->id(), 'name' => 'Тестовый HP', 'template_key' => $key, 'settings' => ['offset_x' => 0, 'offset_y' => 0, 'font_size' => 12, 'fields' => []], 'calibrated_at' => now()]);
+
+        return $this->postJson('/api/generations', ['data_rights' => true, 'profile_id' => $profile->id, 'request_key' => (string) Str::uuid(), 'template_key' => $key, 'data' => CardInput::demo(), 'settings' => ['offset_x' => 0, 'offset_y' => 0, 'font_size' => 12, 'fields' => []]])->assertCreated()->assertJsonPath('template_key', $key)->json('id');
     }
 
     public function test_number_is_assigned_after_generation_without_altering_pdf_or_charging(): void

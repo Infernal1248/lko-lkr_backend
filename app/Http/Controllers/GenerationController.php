@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Card;
 use App\Models\Generation;
 use App\Models\LedgerEntry;
+use App\Models\PrinterProfile;
 use App\Models\User;
 use App\Services\CardInput;
 use App\Services\PdfRenderer;
+use App\Services\RegistryData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -45,8 +48,15 @@ class GenerationController extends Controller
 
     public function store(Request $request): mixed
     {
-        $request->validate(['request_key' => 'required|uuid']);
+        $request->validate(['request_key' => 'required|uuid', 'data_rights' => 'accepted', 'registry' => 'nullable|array', 'employee_id' => 'nullable|integer', 'profile_id' => 'required|integer']);
         $d = $this->input($request);
+        $d['registry'] = RegistryData::validate($request->input('registry') ?? []);
+        $d['employee_id'] = $request->input('employee_id');
+        $profile = PrinterProfile::where('user_id', $request->user()->id)->where('template_key', $d['template_key'])->whereNotNull('calibrated_at')->find($request->integer('profile_id'));
+        if (! $profile) {
+            throw ValidationException::withMessages(['profile_id' => 'Выберите свой настроенный принтер для этой серии карточки.']);
+        }
+        $d['settings'] = $profile->settings;
         // HMAC prevents offline dictionary attacks on deleted snapshots.
         $fingerprint = hash_hmac('sha256', json_encode($d, JSON_UNESCAPED_UNICODE), config('app.key'));
         $generation = DB::transaction(function () use ($request, $d, $fingerprint) {
@@ -59,7 +69,9 @@ class GenerationController extends Controller
             }
             abort_if($user->credits < 1, 402, 'Недостаточно генераций. Пополните баланс.');
             $pdf = $this->renderer->render($d['template_key'], $d['data'], $d['settings']);
-            $g = Generation::create(['id' => (string) Str::uuid(), 'user_id' => $user->id, 'request_key' => $request->input('request_key'), 'fingerprint' => $fingerprint, 'template_key' => $d['template_key'], 'template_version' => config('cards.templates.'.$d['template_key'].'.version'), 'snapshot' => $d, 'pdf' => base64_encode($pdf)]);
+            $employee = $d['employee_id'] ? Card::where('user_id', $user->id)->findOrFail($d['employee_id']) : new Card(['user_id' => $user->id]);
+            $employee->fill(['template_key' => $d['template_key'], 'data' => $d['data'], 'registry' => $d['registry'], 'rights_confirmed_at' => now()])->save();
+            $g = Generation::create(['employee_id' => $employee->id, 'registry' => $d['registry'], 'rights_confirmed_at' => now(), 'id' => (string) Str::uuid(), 'user_id' => $user->id, 'request_key' => $request->input('request_key'), 'fingerprint' => $fingerprint, 'template_key' => $d['template_key'], 'template_version' => config('cards.templates.'.$d['template_key'].'.version'), 'snapshot' => ['template_key' => $d['template_key'], 'data' => $d['data'], 'settings' => $d['settings']], 'pdf' => base64_encode($pdf)]);
             $user->decrement('credits');
             LedgerEntry::create(['user_id' => $user->id, 'amount' => -1, 'balance' => $user->credits, 'reason' => 'generation', 'reference' => 'generation:'.$g->id, 'created_at' => now()]);
 
@@ -72,7 +84,7 @@ class GenerationController extends Controller
     public function index(Request $request): mixed
     {
         $request->validate(['q' => 'nullable|string|max:160', 'page' => 'nullable|integer|min:1']);
-        $query = Generation::where('user_id', $request->user()->id)->select(['id', 'template_key', 'template_version', 'snapshot', 'created_at', 'deleted_at', 'card_number', 'assigned_at'])->latest();
+        $query = Generation::where('user_id', $request->user()->id)->select(['id', 'template_key', 'template_version', 'snapshot', 'created_at', 'deleted_at', 'card_number', 'assigned_at', 'employee_id', 'registry'])->latest();
         $search = mb_strtolower(trim($request->input('q', '')));
         if ($search === '') {
             return $query->paginate(30);
@@ -123,7 +135,7 @@ class GenerationController extends Controller
     public function destroy(Request $request, string $id): mixed
     {
         $g = Generation::where('user_id', $request->user()->id)->findOrFail($id);
-        $g->update(['pdf' => null, 'snapshot' => null, 'card_number' => null, 'card_number_hash' => null, 'assigned_at' => null, 'deleted_at' => now()]);
+        $g->update(['pdf' => null, 'snapshot' => null, 'registry' => null, 'employee_id' => null, 'card_number' => null, 'card_number_hash' => null, 'assigned_at' => null, 'deleted_at' => now()]);
 
         return response()->noContent();
     }

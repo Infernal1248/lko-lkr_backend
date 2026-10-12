@@ -16,6 +16,6 @@ class User extends Authenticatable
 
     protected function casts(): array
     {
-        return ['onboarding_seen_at' => 'datetime', 'email_verified_at' => 'datetime', 'password' => 'hashed', 'organization' => 'encrypted:array', 'credits' => 'integer'];
+        return ['is_support_admin' => 'boolean', 'privacy_accepted_at' => 'datetime', 'onboarding_seen_at' => 'datetime', 'email_verified_at' => 'datetime', 'password' => 'hashed', 'organization' => 'encrypted:array', 'credits' => 'integer'];
     }
 }

@@ -27,10 +27,10 @@ class ImportAndProfilesTest extends TestCase
         $user = $this->user();
         $this->actingAs($user);
         $file = UploadedFile::fake()->createWithContent('employees.csv', "фамилия;имя;отчество\nОбразцов;Иван;Иванович\nОшибка;;\n");
-        $this->postJson('/api/cards/import', ['file' => $file, 'issue_date' => '2026-10-09'])->assertUnprocessable();
+        $this->postJson('/api/cards/import', ['data_rights' => true, 'file' => $file, 'issue_date' => '2026-10-09'])->assertUnprocessable();
         $this->assertDatabaseCount('cards', 0);
         $file = UploadedFile::fake()->createWithContent('employees.csv', "\xEF\xBB\xBFфамилия;имя;отчество\nОбразцов;Иван;Иванович\nТестов;Пётр;\n");
-        $this->postJson('/api/cards/import', ['file' => $file, 'issue_date' => '2026-10-09'])->assertOk()->assertJsonPath('imported', 2);
+        $this->postJson('/api/cards/import', ['data_rights' => true, 'file' => $file, 'issue_date' => '2026-10-09'])->assertOk()->assertJsonPath('imported', 2);
         $this->assertDatabaseCount('cards', 2);
         $this->assertSame(0, $user->fresh()->credits);
     }
@@ -43,7 +43,7 @@ class ImportAndProfilesTest extends TestCase
         try {
             (new Xlsx($sheet))->save($file);
             $upload = new UploadedFile($file, 'staff.xlsx', null, null, true);
-            $this->actingAs($this->user())->postJson('/api/cards/import', ['file' => $upload, 'issue_date' => '2026-10-09'])->assertOk()->assertJsonPath('imported', 1);
+            $this->actingAs($this->user())->postJson('/api/cards/import', ['data_rights' => true, 'file' => $upload, 'issue_date' => '2026-10-09'])->assertOk()->assertJsonPath('imported', 1);
         } finally {
             @unlink($file);
             $sheet->disconnectWorksheets();
@@ -53,7 +53,7 @@ class ImportAndProfilesTest extends TestCase
     public function test_profiles_are_scoped_and_font_is_validated(): void
     {
         $this->actingAs($this->user());
-        $payload = ['name' => 'Офис', 'template_key' => 'ppd-lkr', 'settings' => ['offset_x' => 1, 'offset_y' => -2, 'font_size' => 12]];
+        $payload = ['calibrated' => true, 'name' => 'Офис', 'template_key' => 'ppd-lkr', 'settings' => ['offset_x' => 1, 'offset_y' => -2, 'font_size' => 12]];
         $profile = $this->postJson('/api/profiles', $payload)->assertSuccessful();
         $this->actingAs($this->user())->postJson('/api/profiles', $payload + ['id' => $profile['id']])->assertNotFound();
         $payload['settings']['font_size'] = 15;

@@ -30,7 +30,7 @@ class CalibrationController extends Controller
 
     public function background(Request $request): mixed
     {
-        return response()->file(resource_path('templates/'.$this->templateKey($request).'-calibration.png'));
+        return response()->file(resource_path('templates/'.$this->templateKey($request).($request->boolean('full') ? '.png' : '-calibration.png')));
     }
 
     public function font(): mixed

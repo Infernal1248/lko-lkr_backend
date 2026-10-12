@@ -6,6 +6,9 @@ use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\CardController;
 use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\RegistryController;
+use App\Http\Controllers\SupportController;
 use App\Http\Middleware\PrivateResponse;
 use App\Http\Middleware\RequireConsent;
 use Illuminate\Support\Facades\Route;
@@ -18,8 +21,16 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
     Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:5,1');
     Route::post('/payments/webhook', [PaymentController::class, 'webhook'])->middleware('throttle:120,1');
     Route::get('/templates', [AccountController::class, 'templates']);
+    Route::get('/public-settings', fn () => ['operator_name' => config('cards.operator_name'), 'operator_inn' => config('cards.operator_inn'), 'operator_address' => config('cards.operator_address'), 'privacy_email' => config('cards.privacy_email'), 'privacy_version' => config('cards.privacy_version')]);
     Route::get('/packages', [PaymentController::class, 'packages']);
     Route::middleware('auth')->group(function () {
+        Route::get('/receipts', [ReceiptController::class, 'index']);
+        Route::put('/receipts/{id}', [ReceiptController::class, 'update']);
+        Route::get('/support', [SupportController::class, 'index']);
+        Route::post('/support', [SupportController::class, 'store'])->middleware('throttle:10,1');
+        Route::get('/support/{id}', [SupportController::class, 'show']);
+        Route::post('/support/{id}/messages', [SupportController::class, 'reply'])->middleware('throttle:20,1');
+        Route::post('/support/{id}/close', [SupportController::class, 'close']);
         Route::get('/me', [AccountController::class, 'me']);
         Route::post('/onboarding/seen', [AccountController::class, 'onboarding']);
         Route::post('/logout', [AuthController::class, 'logout']);
@@ -46,6 +57,8 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
             Route::delete('/cards/{id}', [CardController::class, 'destroy']);
             Route::post('/preview', [GenerationController::class, 'preview'])->middleware('throttle:180,1');
             Route::post('/generations', [GenerationController::class, 'store'])->middleware('throttle:20,1');
+            Route::get('/registry/export/{format}', [RegistryController::class, 'export'])->middleware('throttle:5,1');
+            Route::put('/generations/{id}/registry', [RegistryController::class, 'update']);
             Route::get('/generations', [GenerationController::class, 'index']);
             Route::get('/generations/{id}/download', [GenerationController::class, 'download']);
             Route::put('/generations/{id}/number', [GenerationController::class, 'assignNumber']);

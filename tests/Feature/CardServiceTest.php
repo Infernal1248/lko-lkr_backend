@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Consent;
 use App\Models\Generation;
+use App\Models\PrinterProfile;
 use App\Models\User;
 use App\Services\CardInput;
 use App\Services\PdfRenderer;
@@ -21,12 +22,14 @@ class CardServiceTest extends TestCase
         $user = User::factory()->create(['credits' => $credits]);
         Consent::create(['user_id' => $user->id, 'version' => config('cards.consent_version'), 'organization' => ['name' => 'Тест'], 'created_at' => now()]);
 
+        PrinterProfile::create(['user_id' => $user->id, 'name' => 'Тестовый HP', 'template_key' => 'ppd-lkr', 'settings' => ['offset_x' => 0, 'offset_y' => 0, 'font_size' => 12, 'fields' => []], 'calibrated_at' => now()]);
+
         return $user;
     }
 
     private function payload(): array
     {
-        return ['template_key' => 'ppd-lkr', 'data' => CardInput::demo(), 'settings' => ['offset_x' => 0, 'offset_y' => 0, 'font_size' => 12, 'fields' => []], 'request_key' => (string) Str::uuid()];
+        return ['data_rights' => true, 'profile_id' => PrinterProfile::query()->value('id'), 'template_key' => 'ppd-lkr', 'data' => CardInput::demo(), 'settings' => ['offset_x' => 0, 'offset_y' => 0, 'font_size' => 12, 'fields' => []], 'request_key' => (string) Str::uuid()];
     }
 
     public function test_pdf_generation_is_idempotent_and_download_free(): void
@@ -112,7 +115,7 @@ class CardServiceTest extends TestCase
 
     public function test_registration_login_and_logout(): void
     {
-        $this->postJson('/api/register', ['name' => 'Тестовый пользователь', 'email' => 'test@example.test', 'password' => 'LongPassword123', 'password_confirmation' => 'LongPassword123', 'terms' => true])->assertCreated();
+        $this->postJson('/api/register', ['name' => 'Тестовый пользователь', 'email' => 'test@example.test', 'password' => 'LongPassword123', 'password_confirmation' => 'LongPassword123', 'terms' => true, 'privacy' => true])->assertCreated();
         $this->getJson('/api/me')->assertOk();
         $this->postJson('/api/logout')->assertNoContent();
         $this->postJson('/api/login', ['email' => 'test@example.test', 'password' => 'wrong'])->assertUnprocessable();

@@ -97,6 +97,16 @@ class PdfRenderer
         return $pdf;
     }
 
+    public function registryDocument(): \TCPDF
+    {
+        $pdf = $this->document(['width' => 420, 'height' => 297]);
+        $pdf->SetMargins(10, 10, 10);
+        $pdf->SetAutoPageBreak(true, 12);
+        $pdf->SetXY(10, 10);
+
+        return $pdf;
+    }
+
     public function demoFontSizes(string $templateKey = 'ppd-lkr'): array
     {
         $template = config('cards.templates.'.$templateKey);

@@ -19,11 +19,23 @@ class YooKassa
     {
         $amount = ['value' => number_format($payment->amount / 100, 2, '.', ''), 'currency' => 'RUB'];
 
-        return $this->client()->withHeaders(['Idempotence-Key' => $payment->id])->post('/payments', [
-            'amount' => $amount, 'capture' => true, 'confirmation' => ['type' => 'redirect', 'return_url' => config('app.url').'/?payment='.$payment->id],
-            'description' => 'Пакет: '.$payment->credits.' генераций ЛКР', 'metadata' => ['order_id' => $payment->id],
-            'receipt' => ['customer' => ['email' => $email], 'items' => [['description' => $payment->credits.' генераций карточек ЛКР', 'quantity' => '1.00', 'amount' => $amount, 'vat_code' => config('cards.yookassa.vat_code'), 'payment_mode' => 'full_payment', 'payment_subject' => 'service']]],
-        ])->throw()->json();
+        $payload = [
+            'amount' => $amount, 'capture' => true,
+            'confirmation' => ['type' => 'redirect', 'return_url' => config('app.url').'/?payment='.$payment->id],
+            'description' => 'Пакет: '.$payment->credits.' генераций ЛКО/ЛКР',
+            'metadata' => ['order_id' => $payment->id],
+        ];
+        $mode = $payment->receipt_mode ?? config('cards.receipt_mode');
+        abort_unless(in_array($mode, ['54fz', 'npd_manual']), 503, 'Не настроен режим формирования чеков.');
+        if ($mode === '54fz') {
+            $payload['receipt'] = ['customer' => ['email' => $email], 'items' => [[
+                'description' => $payment->credits.' генераций карточек ЛКО/ЛКР', 'quantity' => '1.00',
+                'amount' => $amount, 'vat_code' => config('cards.yookassa.vat_code'),
+                'payment_mode' => 'full_payment', 'payment_subject' => 'service',
+            ]]];
+        }
+
+        return $this->client()->withHeaders(['Idempotence-Key' => $payment->id])->post('/payments', $payload)->throw()->json();
     }
 
     public function fetch(string $id): array

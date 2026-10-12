@@ -1,7 +1,13 @@
 <?php
 
 return [
-    'consent_version' => '2026-10-09.1',
+    'consent_version' => '2026-10-11.1',
+    'privacy_version' => '2026-10-11.1',
+    'operator_name' => env('SERVICE_OPERATOR_NAME', 'Кочергин Владимир Михайлович'),
+    'operator_inn' => env('SERVICE_OPERATOR_INN', '242022368804'),
+    'operator_address' => env('SERVICE_OPERATOR_ADDRESS', ''),
+    'privacy_email' => env('SERVICE_PRIVACY_EMAIL', 'kochergin.vladim@mail.ru'),
+    'receipt_mode' => env('YOOKASSA_RECEIPT_MODE', 'npd_manual'),
     'templates' => [
         'ppd-lkr' => [
             'name' => 'Личная карточка работника', 'manufacturer' => 'ООО «Первый печатный двор»', 'preview_image' => 'templates/ppd-lkr.png', 'series' => 'ЛКР', 'version' => '3.0',

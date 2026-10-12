@@ -12,6 +12,6 @@ class PrinterProfile extends Model
 
     protected function casts(): array
     {
-        return ['settings' => 'array'];
+        return ['calibrated_at' => 'datetime', 'settings' => 'array'];
     }
 }

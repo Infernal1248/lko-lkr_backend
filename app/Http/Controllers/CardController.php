@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Card;
 use App\Services\CardInput;
+use App\Services\RegistryData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +19,10 @@ class CardController extends Controller
 
     public function store(Request $request): mixed
     {
-        $d = CardInput::validate($request->all());
+        $request->validate(['data_rights' => 'accepted', 'registry' => 'nullable|array']);
+        $d = CardInput::employee($request->all());
+        $d['registry'] = RegistryData::validate($request->input('registry') ?? []);
+        $d['rights_confirmed_at'] = now();
 
         return Card::create($d + ['user_id' => $request->user()->id]);
     }
@@ -26,7 +30,8 @@ class CardController extends Controller
     public function update(Request $request, int $id): mixed
     {
         $card = Card::where('user_id', $request->user()->id)->findOrFail($id);
-        $card->update(CardInput::validate($request->all()));
+        $request->validate(['data_rights' => 'accepted', 'registry' => 'nullable|array']);
+        $card->update(CardInput::employee($request->all()) + ['registry' => RegistryData::validate($request->input('registry') ?? []), 'rights_confirmed_at' => now()]);
 
         return $card;
     }
@@ -45,7 +50,7 @@ class CardController extends Controller
 
     public function import(Request $request): mixed
     {
-        $request->validate(['file' => 'required|file|max:2048|extensions:csv,xlsx', 'issue_date' => 'required|date_format:Y-m-d']);
+        $request->validate(['data_rights' => 'accepted', 'registry' => 'nullable|array', 'file' => 'required|file|max:2048|extensions:csv,xlsx', 'issue_date' => 'required|date_format:Y-m-d']);
         $org = $request->user()->organization;
         if (! $org) {
             throw ValidationException::withMessages(['file' => 'Сначала сохраните реквизиты организации.']);
@@ -88,7 +93,7 @@ class CardController extends Controller
         }
         DB::transaction(function () use ($valid, $request) {
             foreach ($valid as $d) {
-                Card::create($d + ['user_id' => $request->user()->id]);
+                Card::create($d + ['user_id' => $request->user()->id, 'rights_confirmed_at' => now()]);
             }
         });
 

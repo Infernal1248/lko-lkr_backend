@@ -18,8 +18,9 @@ class AuthController extends Controller
     public function register(Request $request): mixed
     {
         $request->merge(['email' => mb_strtolower(trim((string) $request->input('email')))]);
-        $d = $request->validate(['name' => 'required|string|max:100', 'email' => 'required|email|max:254|unique:users,email', 'password' => ['required', 'confirmed', PasswordRule::min(12)->letters()->numbers()], 'terms' => 'accepted']);
+        $d = $request->validate(['name' => 'required|string|max:100', 'email' => 'required|email|max:254|unique:users,email', 'password' => ['required', 'confirmed', PasswordRule::min(12)->letters()->numbers()], 'terms' => 'accepted', 'privacy' => 'accepted']);
         $u = User::create($d);
+        $u->forceFill(['privacy_accepted_at' => now(), 'privacy_version' => config('cards.privacy_version')])->save();
         Auth::login($u);
         $request->session()->regenerate();
 

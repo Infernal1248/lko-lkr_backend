@@ -27,24 +27,26 @@ class PaymentController extends Controller
 
     public function store(Request $request): mixed
     {
-        $request->validate(['package' => ['required', Rule::in(array_keys(config('cards.packages')))], 'request_key' => 'required|uuid']);
+        $request->validate(['package' => ['required', Rule::in(array_keys(config('cards.packages')))], 'request_key' => 'required|uuid', 'buyer_type' => 'required|in:person,company', 'buyer_name' => 'required|string|max:180', 'buyer_inn' => ['nullable', 'required_if:buyer_type,company', 'regex:/^(?:[0-9]{10}|[0-9]{12})$/']]);
         abort_unless(config('cards.payments_enabled'), 503, 'Приём платежей ещё не настроен.');
-        $payment = DB::transaction(function () use ($request) {
+        $buyer = ['type' => $request->input('buyer_type'), 'name' => $request->input('buyer_name'), 'inn' => $request->input('buyer_type') === 'company' ? $request->input('buyer_inn') : null, 'email' => $request->user()->email];
+        $payment = DB::transaction(function () use ($request, $buyer) {
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $p = Payment::where('user_id', $request->user()->id)->where('request_key', $request->input('request_key'))->first();
             if ($p) {
-                abort_unless($p->package === $request->input('package'), 409, 'Запрос уже использован.');
+                abort_unless($p->package === $request->input('package') && $p->buyer === $buyer && $p->test_mode === config('cards.yookassa.test'), 409, 'Запрос уже использован.');
 
                 return $p;
             }
             $pack = config('cards.packages.'.$request->input('package'));
 
-            return Payment::create(['id' => (string) Str::uuid(), 'user_id' => $request->user()->id, 'request_key' => $request->input('request_key'), 'package' => $request->input('package'), 'amount' => $pack['amount'], 'credits' => $pack['credits']]);
+            return Payment::create(['buyer' => $buyer, 'test_mode' => config('cards.yookassa.test'), 'receipt_mode' => config('cards.receipt_mode'), 'id' => (string) Str::uuid(), 'user_id' => $request->user()->id, 'request_key' => $request->input('request_key'), 'package' => $request->input('package'), 'amount' => $pack['amount'], 'credits' => $pack['credits']]);
         }, 3);
         if (! $payment->provider_id) {
             abort_if($payment->created_at->lt(now()->subHours(23)), 409, 'Срок подтверждения платежа истёк. Обратитесь в поддержку до повторной оплаты.');
             $result = $this->gateway->create($payment, $request->user()->email);
             abort_unless(isset($result['id'],$result['confirmation']['confirmation_url']), 502, 'Некорректный ответ платёжной системы.');
+            abort_unless(($result['test'] ?? null) === $payment->test_mode, 422, 'Режим магазина ЮKassa не совпадает с настройкой YOOKASSA_TEST. Проверьте ключи и режим до оплаты.');
             $payment->update(['provider_id' => $result['id'], 'confirmation_url' => $result['confirmation']['confirmation_url']]);
         }
 
@@ -76,7 +78,7 @@ class PaymentController extends Controller
     {
         // Never trust webhook payload status: retrieve the payment using merchant credentials.
         $remote = $this->gateway->fetch($payment->provider_id);
-        abort_unless(($remote['id'] ?? null) === $payment->provider_id && ($remote['metadata']['order_id'] ?? null) === $payment->id && ($remote['amount']['currency'] ?? null) === 'RUB' && ($remote['amount']['value'] ?? null) === number_format($payment->amount / 100, 2, '.', '') && ($remote['test'] ?? null) === config('cards.yookassa.test'), 422, 'Платёж не прошёл проверку.');
+        abort_unless(($remote['id'] ?? null) === $payment->provider_id && ($remote['metadata']['order_id'] ?? null) === $payment->id && ($remote['amount']['currency'] ?? null) === 'RUB' && ($remote['amount']['value'] ?? null) === number_format($payment->amount / 100, 2, '.', '') && ($remote['test'] ?? null) === ($payment->test_mode ?? config('cards.yookassa.test')), 422, 'Платёж не прошёл проверку.');
         DB::transaction(function () use ($payment, $remote) {
             $p = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
             if ($p->status === 'succeeded') {
@@ -86,7 +88,7 @@ class PaymentController extends Controller
                 $user = User::whereKey($p->user_id)->lockForUpdate()->firstOrFail();
                 $user->increment('credits', $p->credits);
                 LedgerEntry::create(['user_id' => $user->id, 'amount' => $p->credits, 'balance' => $user->credits, 'reason' => 'purchase', 'reference' => 'payment:'.$p->id, 'created_at' => now()]);
-                $p->update(['status' => 'succeeded']);
+                $p->update(['status' => 'succeeded', 'paid_at' => now()]);
             } elseif (($remote['status'] ?? '') === 'canceled') {
                 $p->update(['status' => 'canceled']);
             }

@@ -57,10 +57,10 @@ class AccountController extends Controller
 
     public function saveProfile(Request $request): mixed
     {
-        $d = $request->validate(['id' => 'nullable|integer', 'name' => 'required|string|max:100', 'template_key' => ['required', Rule::in(array_keys(config('cards.templates')))], 'settings' => 'required|array']);
+        $d = $request->validate(['id' => 'nullable|integer', 'name' => 'required|string|max:100', 'template_key' => ['required', Rule::in(array_keys(config('cards.templates')))], 'settings' => 'required|array', 'calibrated' => 'required|boolean']);
         $settings = CardInput::settings($d['settings']);
         $p = isset($d['id']) ? PrinterProfile::where('user_id', $request->user()->id)->findOrFail($d['id']) : new PrinterProfile(['user_id' => $request->user()->id]);
-        $p->fill(['name' => $d['name'], 'template_key' => $d['template_key'], 'settings' => $settings])->save();
+        $p->fill(['name' => $d['name'], 'template_key' => $d['template_key'], 'settings' => $settings, 'calibrated_at' => $request->boolean('calibrated') ? now() : null])->save();
 
         return $p;
     }
