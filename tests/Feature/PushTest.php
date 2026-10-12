@@ -130,4 +130,39 @@ class PushTest extends TestCase
             rmdir($dir);
         }
     }
+
+    public function test_browser_can_decrypt_complete_push_record(): void
+    {
+        // Decode independently with OpenSSL/HKDF, as an RFC 8291 receiver would.
+        $private = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        $details = openssl_pkey_get_details($private);
+        $public = "\x04".$details['ec']['x'].$details['ec']['y'];
+        $auth = random_bytes(16);
+        $encode = fn ($bytes) => rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
+        $s = $this->sub(User::factory()->create());
+        $s->subscription = ['endpoint' => 'https://web.push.apple.com/test', 'keys' => ['p256dh' => $encode($public), 'auth' => $encode($auth)]];
+        $history = [];
+        $stack = HandlerStack::create(new MockHandler([new Response(201)]));
+        $stack->push(Middleware::history($history));
+        $payload = ['title' => 'ЛКО / ЛКР', 'body' => 'Пробное уведомление'];
+        $sender = new WebPushSender(new Client(['handler' => $stack]));
+        $this->assertSame([$s->id => 201], $sender->send(collect([$s]), $payload));
+        $record = (string) $history[0]['request']->getBody();
+        $salt = substr($record, 0, 16);
+        $keyLength = ord($record[20]);
+        $serverKey = substr($record, 21, $keyLength);
+        $this->assertSame(65, $keyLength);
+        $der = hex2bin('3059301306072a8648ce3d020106082a8648ce3d030107034200').$serverKey;
+        $pem = "-----BEGIN PUBLIC KEY-----\n".chunk_split(base64_encode($der), 64, "\n")."-----END PUBLIC KEY-----\n";
+        $shared = openssl_pkey_derive(openssl_pkey_get_public($pem), $private, 32);
+        $ikm = hash_hkdf('sha256', $shared, 32, "WebPush: info\0".$public.$serverKey, $auth);
+        $cek = hash_hkdf('sha256', $ikm, 16, "Content-Encoding: aes128gcm\0", $salt);
+        $nonce = hash_hkdf('sha256', $ikm, 12, "Content-Encoding: nonce\0", $salt);
+        $encrypted = substr($record, 21 + $keyLength);
+        $plain = openssl_decrypt(substr($encrypted, 0, -16), 'aes-128-gcm', $cek, OPENSSL_RAW_DATA, $nonce, substr($encrypted, -16));
+        $this->assertNotFalse($plain);
+        $unpadded = rtrim($plain, "\0");
+        $this->assertSame("\x02", substr($unpadded, -1), 'Final record delimiter required by RFC 8188 must be present.');
+        $this->assertSame($payload, json_decode(substr($unpadded, 0, -1), true, 512, JSON_THROW_ON_ERROR));
+    }
 }

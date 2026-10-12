@@ -5,7 +5,6 @@ namespace App\Services;
 use GuzzleHttp\Client;
 use GuzzleHttp\Pool;
 use Illuminate\Support\Collection;
-use Minishlink\WebPush\Notification;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
 use Psr\Http\Message\RequestInterface;
@@ -22,7 +21,14 @@ class WebPushSender
         {
             public function request(array $subscription, string $payload): RequestInterface
             {
-                return $this->prepare([new Notification(Subscription::create($subscription + ['contentEncoding' => 'aes128gcm']), $payload, [], [])])[0];
+                // queueNotification adds the mandatory final-record delimiter and padding.
+                // Calling prepare with a raw payload encrypts an invalid RFC 8188 record.
+                $this->queueNotification(Subscription::create($subscription + ['contentEncoding' => 'aes128gcm']), $payload);
+                try {
+                    return $this->prepare($this->notifications)[0];
+                } finally {
+                    $this->notifications = [];
+                }
             }
         };
         $push->setReuseVAPIDHeaders(true);
