@@ -32,7 +32,7 @@ return [
     ],
     'packages' => [
         'start' => ['name' => 'Стартовый', 'credits' => 25, 'amount' => 49000],
-        'standard' => ['name' => 'Рабочий', 'credits' => 50, 'amount' => (int) env('PACKAGE_50_AMOUNT', 99000)],
+        'standard' => ['name' => 'Рабочий', 'credits' => 50, 'amount' => (int) env('PACKAGE_50_AMOUNT', 89000)],
         'business' => ['name' => 'Расширенный', 'credits' => 100, 'amount' => 149000],
     ],
     'payments_enabled' => (bool) env('PAYMENTS_ENABLED', false),
