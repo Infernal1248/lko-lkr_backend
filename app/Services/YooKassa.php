@@ -50,8 +50,8 @@ class YooKassa
         return $this->client()->withHeaders(['Idempotence-Key' => $payment->id])->post('/payments', $payload)->throw()->json();
     }
 
-    public function fetch(string $id): array
+    public function fetch(string $id, int $timeout = 20): array
     {
-        return $this->client()->get('/payments/'.rawurlencode($id))->throw()->json();
+        return $this->client()->timeout($timeout)->get('/payments/'.rawurlencode($id))->throw()->json();
     }
 }

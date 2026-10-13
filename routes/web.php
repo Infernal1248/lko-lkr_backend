@@ -7,16 +7,22 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\CardController;
 use App\Http\Controllers\GenerationController;
+use App\Http\Controllers\NpdBotController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PushController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\RegistryController;
 use App\Http\Controllers\SupportController;
+use App\Http\Middleware\NpdBotAuth;
 use App\Http\Middleware\PrivateResponse;
 use App\Http\Middleware\RequireConsent;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
+    Route::middleware([NpdBotAuth::class, 'throttle:60,1'])->group(function () {
+        Route::get('/npd/payments', [NpdBotController::class, 'index']);
+        Route::post('/npd/receipts', [NpdBotController::class, 'store']);
+    });
     Route::get('/csrf', fn () => response()->json(['token' => csrf_token()]));
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login');

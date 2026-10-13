@@ -6,10 +6,12 @@ use App\Models\LedgerEntry;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\NpdQueue;
 use App\Services\PushNotifications;
 use App\Services\YooKassa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class PaymentController extends Controller
@@ -91,6 +93,14 @@ class PaymentController extends Controller
                 $user->increment('credits', $p->credits);
                 LedgerEntry::create(['user_id' => $user->id, 'amount' => $p->credits, 'balance' => $user->credits, 'reason' => 'purchase', 'reference' => 'payment:'.$p->id, 'created_at' => now()]);
                 $p->update(['status' => 'succeeded', 'paid_at' => now()]);
+                if (! $p->test_mode && $p->receipt_mode === 'npd_manual') {
+                    try {
+                        app(NpdQueue::class)->freeze($p, $remote);
+                    } catch (\Throwable $e) {
+                        // A receipt metadata problem must not undo a verified payment.
+                        Log::warning('NPD snapshot requires verification', ['payment_id' => $p->id]);
+                    }
+                }
 
                 return true;
             } elseif (($remote['status'] ?? '') === 'canceled') {
