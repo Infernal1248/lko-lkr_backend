@@ -29,6 +29,7 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
     Route::middleware('auth')->group(function () {
         Route::get('/admin/packages', [AdminPackageController::class, 'index']);
         Route::post('/admin/packages', [AdminPackageController::class, 'save']);
+        Route::put('/admin/packages/order', [AdminPackageController::class, 'reorder']);
         Route::put('/admin/packages/{key}', [AdminPackageController::class, 'save']);
         Route::get('/admin/accounts', [AdminCreditController::class, 'index']);
         Route::post('/admin/credits', [AdminCreditController::class, 'store'])->middleware('throttle:30,1');

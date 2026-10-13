@@ -33,13 +33,28 @@ class PackagesTest extends TestCase
     {
         $this->actingAs(User::factory()->create(['is_support_admin' => true]));
         $key = $this->postJson('/api/admin/packages', $this->data())->assertSuccessful()->json('key');
-        $this->getJson('/api/packages')->assertJsonPath('packages.0.key', $key)->assertJsonPath('packages.0.amount', 120050);
+        $this->getJson('/api/packages')->assertJsonPath('packages.3.key', $key)->assertJsonPath('packages.3.amount', 120050);
         $this->putJson('/api/admin/packages/'.$key, [...$this->data(), 'active' => false])->assertOk();
         $this->getJson('/api/packages')->assertJsonCount(3, 'packages');
         $this->getJson('/api/admin/packages')->assertJsonCount(4);
         $this->putJson('/api/admin/packages/start', [...$this->data(), 'credits' => 0])->assertUnprocessable();
         $this->putJson('/api/admin/packages/start', [...$this->data(), 'amount' => -10])->assertUnprocessable();
         $this->putJson('/api/admin/packages/start', [...$this->data(), 'amount' => 100.5])->assertUnprocessable();
+    }
+
+    public function test_reordering_is_atomic_admin_only_and_survives_edits(): void
+    {
+        $keys = ['business', 'start', 'standard'];
+        $this->putJson('/api/admin/packages/order', ['keys' => $keys])->assertUnauthorized();
+        $this->actingAs(User::factory()->create())->putJson('/api/admin/packages/order', ['keys' => $keys])->assertForbidden();
+        $this->actingAs(User::factory()->create(['is_support_admin' => true]));
+        $this->putJson('/api/admin/packages/order', ['keys' => $keys])->assertOk()->assertJsonPath('0.key', 'business');
+        $this->getJson('/api/packages')->assertJsonPath('packages.0.key', 'business')->assertJsonPath('packages.1.key', 'start');
+        $this->putJson('/api/admin/packages/business', $this->data())->assertOk()->assertJsonPath('sort_order', 1);
+        $this->putJson('/api/admin/packages/order', ['keys' => ['start', 'start', 'standard']])->assertUnprocessable();
+        $this->putJson('/api/admin/packages/order', ['keys' => ['start', 'missing', 'standard']])->assertConflict();
+        $this->putJson('/api/admin/packages/order', ['keys' => ['start', 'standard']])->assertConflict();
+        $this->assertSame($keys, Package::orderBy('sort_order')->pluck('key')->all());
     }
 
     public function test_existing_order_keeps_terms_after_edit_and_disable(): void
