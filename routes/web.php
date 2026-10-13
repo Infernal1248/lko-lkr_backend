@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AdminCreditController;
+use App\Http\Controllers\AdminPackageController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\CardController;
@@ -26,6 +27,9 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
     Route::get('/public-settings', fn () => ['operator_name' => config('cards.operator_name'), 'operator_inn' => config('cards.operator_inn'), 'operator_address' => config('cards.operator_address'), 'privacy_email' => config('cards.privacy_email'), 'privacy_version' => config('cards.privacy_version')]);
     Route::get('/packages', [PaymentController::class, 'packages']);
     Route::middleware('auth')->group(function () {
+        Route::get('/admin/packages', [AdminPackageController::class, 'index']);
+        Route::post('/admin/packages', [AdminPackageController::class, 'save']);
+        Route::put('/admin/packages/{key}', [AdminPackageController::class, 'save']);
         Route::get('/admin/accounts', [AdminCreditController::class, 'index']);
         Route::post('/admin/credits', [AdminCreditController::class, 'store'])->middleware('throttle:30,1');
         Route::get('/push/settings', [PushController::class, 'settings']);
