@@ -27,6 +27,25 @@ class PasswordResetTest extends TestCase
         $this->postJson('/api/reset-password', $input)->assertUnprocessable();
     }
 
+    public function test_reset_email_has_russian_html_and_plain_text_with_the_same_link(): void
+    {
+        config(['app.url' => 'https://example.test', 'auth.passwords.users.expire' => 45]);
+        $user = User::factory()->create(['email' => 'test+mail@example.test']);
+        $mail = (new ResetPassword('sample-token'))->toMail($user);
+        $this->assertSame('Восстановление пароля — ЛКО / ЛКР', $mail->subject);
+        $url = 'https://example.test/?reset_token=sample-token&email=test%2Bmail%40example.test';
+        $html = view($mail->view['html'], $mail->viewData)->render();
+        $text = view($mail->view['text'], $mail->viewData)->render();
+        $this->assertStringContainsString('lang="ru"', $html);
+        $this->assertStringContainsString('Задать новый пароль', $html);
+        $this->assertStringContainsString('45 мин.', $html);
+        $this->assertStringContainsString('href="'.e($url).'"', $html);
+        $this->assertStringContainsString($url, $text);
+        $this->assertStringContainsString('45 мин.', $text);
+        $this->assertStringNotContainsString('Hello!', $html);
+        $this->assertStringNotContainsString('All rights reserved', $html);
+    }
+
     public function test_forgot_password_does_not_reveal_account_existence(): void
     {
         $this->postJson('/api/forgot-password', ['email' => 'missing@example.test'])->assertOk()->assertJsonPath('message', 'Если аккаунт существует, инструкция отправлена на почту.');
