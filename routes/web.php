@@ -33,6 +33,7 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
     Route::get('/public-settings', fn () => ['operator_name' => config('cards.operator_name'), 'operator_inn' => config('cards.operator_inn'), 'operator_address' => config('cards.operator_address'), 'privacy_email' => config('cards.privacy_email'), 'privacy_version' => config('cards.privacy_version')]);
     Route::get('/packages', [PaymentController::class, 'packages']);
     Route::middleware('auth')->group(function () {
+        Route::post('/username', [AuthController::class, 'chooseUsername'])->middleware('throttle:10,1');
         Route::get('/admin/packages', [AdminPackageController::class, 'index']);
         Route::post('/admin/packages', [AdminPackageController::class, 'save']);
         Route::put('/admin/packages/order', [AdminPackageController::class, 'reorder']);

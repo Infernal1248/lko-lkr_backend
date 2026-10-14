@@ -12,7 +12,14 @@ Artisan::command('cards:demo {email} {--credits=10}', function () {
 
         return 1;
     }
-    $user = User::where('email', $this->argument('email'))->firstOrFail();
+    $identity = mb_strtolower(trim($this->argument('email')));
+    $matches = User::where(str_contains($identity, '@') ? 'email' : 'username', $identity)->limit(2)->get();
+    if ($matches->count() !== 1) {
+        $this->error('Укажите уникальный логин аккаунта. По почте аккаунт не найден или найдено несколько.');
+
+        return 1;
+    }
+    $user = $matches->first();
     $amount = (int) $this->option('credits');
     if ($amount < 1 || $amount > 1000) {
         return 1;

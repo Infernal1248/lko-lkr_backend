@@ -194,9 +194,9 @@ class RegistryAndSupportTest extends TestCase
     public function test_registration_requires_privacy_and_does_not_allow_admin_escalation(): void
     {
         $d = ['name' => 'Тест', 'email' => 'privacy@example.test', 'password' => 'Password123456', 'password_confirmation' => 'Password123456', 'terms' => true, 'is_support_admin' => true];
-        $this->postJson('/api/register', $d)->assertUnprocessable()->assertJsonValidationErrors('privacy');
+        $this->postJson('/api/register', $d + ['username' => 'test_user'])->assertUnprocessable()->assertJsonValidationErrors('privacy');
         $d['privacy'] = true;
-        $this->postJson('/api/register', $d)->assertCreated();
+        $this->postJson('/api/register', $d + ['username' => 'test_user'])->assertCreated();
         $u = User::first();
         $this->assertFalse($u->is_support_admin);
         $this->assertNotNull($u->privacy_accepted_at);

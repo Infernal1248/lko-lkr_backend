@@ -115,10 +115,10 @@ class CardServiceTest extends TestCase
 
     public function test_registration_login_and_logout(): void
     {
-        $this->postJson('/api/register', ['name' => 'Тестовый пользователь', 'email' => 'test@example.test', 'password' => 'LongPassword123', 'password_confirmation' => 'LongPassword123', 'terms' => true, 'privacy' => true])->assertCreated();
+        $this->postJson('/api/register', ['username' => 'test_user', 'name' => 'Тестовый пользователь', 'email' => 'test@example.test', 'password' => 'LongPassword123', 'password_confirmation' => 'LongPassword123', 'terms' => true, 'privacy' => true])->assertCreated();
         $this->getJson('/api/me')->assertOk();
         $this->postJson('/api/logout')->assertNoContent();
-        $this->postJson('/api/login', ['email' => 'test@example.test', 'password' => 'wrong'])->assertUnprocessable();
-        $this->postJson('/api/login', ['email' => 'test@example.test', 'password' => 'LongPassword123'])->assertOk();
+        $this->postJson('/api/login', ['identifier' => 'test_user', 'password' => 'wrong'])->assertUnprocessable();
+        $this->postJson('/api/login', ['identifier' => 'test_user', 'password' => 'LongPassword123'])->assertOk();
     }
 }

@@ -46,7 +46,7 @@ class AdminCreditsTest extends TestCase
         $user = User::factory()->create(['name' => 'Иван Образцов', 'email' => 'find@example.test']);
         foreach (['Образцов', 'find@example.test'] as $search) {
             $response = $this->actingAs($admin)->getJson('/api/admin/accounts?search='.urlencode($search))->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $user->id);
-            $this->assertEqualsCanonicalizing(['id', 'name', 'email', 'credits'], array_keys($response->json('data.0')));
+            $this->assertEqualsCanonicalizing(['id', 'name', 'email', 'username', 'credits'], array_keys($response->json('data.0')));
         }
     }
 

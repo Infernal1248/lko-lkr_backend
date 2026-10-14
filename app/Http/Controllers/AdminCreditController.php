@@ -15,9 +15,9 @@ class AdminCreditController extends Controller
         $data = $request->validate(['search' => ['nullable', 'string', 'max:255']]);
         $search = trim($data['search'] ?? '');
 
-        return User::select('id', 'name', 'email', 'credits')
+        return User::select('id', 'name', 'email', 'username', 'credits')
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q
-                ->where('email', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%')))
+                ->where('username', 'like', '%'.$search.'%')->orWhere('email', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%')))
             ->orderBy('id')->paginate(20);
     }
 
@@ -50,7 +50,7 @@ class AdminCreditController extends Controller
                 ]);
             }
 
-            return ['user' => $user->only('id', 'name', 'email', 'credits'), 'entry' => $entry];
+            return ['user' => $user->only('id', 'name', 'email', 'username', 'credits'), 'entry' => $entry];
         }, 3);
     }
 }

@@ -10,9 +10,15 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
-    protected $fillable = ['name', 'email', 'password', 'organization'];
+    protected $fillable = ['name', 'email', 'username', 'password', 'organization'];
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = ['password', 'remember_token', 'legacy_email'];
+
+    public function getEmailForPasswordReset(): string
+    {
+        // This is the reset-token storage key; notification delivery still uses $this->email.
+        return 'account:'.$this->getKey();
+    }
 
     protected function casts(): array
     {

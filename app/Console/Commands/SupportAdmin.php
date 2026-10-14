@@ -7,13 +7,20 @@ use Illuminate\Console\Command;
 
 class SupportAdmin extends Command
 {
-    protected $signature = 'support:admin {email} {--revoke}';
+    protected $signature = 'support:admin {email : Логин или однозначный email аккаунта} {--revoke}';
 
     protected $description = 'Grant or revoke access to the support inbox for an existing account';
 
     public function handle(): int
     {
-        $u = User::where('email', $this->argument('email'))->first();
+        $identity = mb_strtolower(trim($this->argument('email')));
+        $matches = User::where(str_contains($identity, '@') ? 'email' : 'username', $identity)->limit(2)->get();
+        if ($matches->count() > 1) {
+            $this->error('Эта почта используется несколькими аккаунтами. Укажите логин.');
+
+            return self::FAILURE;
+        }
+        $u = $matches->first();
         if (! $u) {
             $this->error('Аккаунт не найден.');
 

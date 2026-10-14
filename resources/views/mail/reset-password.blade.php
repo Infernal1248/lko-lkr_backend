@@ -19,6 +19,7 @@
             <h1 style="margin:0 0 24px;font-size:24px;line-height:32px;color:#172d43;">Восстановление пароля</h1>
             <p style="margin:0 0 16px;font-size:15px;line-height:24px;">Здравствуйте!</p>
             <p style="margin:0 0 24px;font-size:15px;line-height:24px;">Мы получили запрос на смену пароля для вашего аккаунта. Нажмите кнопку ниже, чтобы задать новый пароль.</p>
+            @if($username)<p style="margin:0 0 24px;font-size:15px;line-height:24px;">Логин аккаунта: <strong>{{ $username }}</strong></p>@endif
             <table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#172d43" style="border-radius:6px;text-align:center;mso-padding-alt:14px 24px;">
                 <a href="{{ $resetUrl }}" style="display:inline-block;padding:14px 24px;border:1px solid #172d43;border-radius:6px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;line-height:20px;">Задать новый пароль</a>
             </td></tr></table>

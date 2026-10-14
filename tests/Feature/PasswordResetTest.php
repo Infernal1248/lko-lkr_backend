@@ -33,7 +33,7 @@ class PasswordResetTest extends TestCase
         $user = User::factory()->create(['email' => 'test+mail@example.test']);
         $mail = (new ResetPassword('sample-token'))->toMail($user);
         $this->assertSame('Восстановление пароля — ЛКО / ЛКР', $mail->subject);
-        $url = 'https://example.test/?reset_token=sample-token&email=test%2Bmail%40example.test';
+        $url = 'https://example.test/?reset_token=sample-token&account_id='.$user->id;
         $html = view($mail->view['html'], $mail->viewData)->render();
         $text = view($mail->view['text'], $mail->viewData)->render();
         $this->assertStringContainsString('lang="ru"', $html);
