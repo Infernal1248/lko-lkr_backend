@@ -35,16 +35,16 @@ class WelcomeBonusTest extends TestCase
         $this->assertDatabaseCount('payments', 0);
     }
 
-    public function test_each_account_gets_three_and_cannot_choose_amount_or_recipient(): void
+    public function test_same_email_gets_bonus_once_and_cannot_choose_amount_or_recipient(): void
     {
         $a = User::factory()->create(['credits' => 0]);
         $b = User::factory()->create(['email' => $a->email, 'legacy_email' => null, 'credits' => 0]);
         $this->actingAs($a)->postJson('/api/welcome-bonus', ['user_id' => $b->id, 'amount' => 1000])->assertOk()->assertJsonPath('credits', 3);
         $this->assertSame(0, $b->fresh()->credits);
-        $this->actingAs($b)->getJson('/api/me')->assertOk()->assertJsonPath('welcome_bonus_claimed', false);
-        $this->postJson('/api/welcome-bonus')->assertOk()->assertJsonPath('credits', 3);
+        $this->actingAs($b)->getJson('/api/me')->assertOk()->assertJsonPath('welcome_bonus_claimed', true);
+        $this->postJson('/api/welcome-bonus')->assertOk()->assertJsonPath('credits', 0)->assertJsonPath('credited', false);
         $this->assertSame(3, $a->fresh()->credits);
-        $this->assertDatabaseCount('ledger_entries', 2);
+        $this->assertDatabaseCount('ledger_entries', 1);
     }
 
     public function test_failed_ledger_write_rolls_back_balance_and_allows_retry(): void

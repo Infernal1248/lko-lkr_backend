@@ -4,6 +4,7 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AdminCreditController;
 use App\Http\Controllers\AdminPackageController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BonusEmailController;
 use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\CardController;
 use App\Http\Controllers\GenerationController;
@@ -23,6 +24,7 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
         Route::get('/npd/payments', [NpdBotController::class, 'index']);
         Route::post('/npd/receipts', [NpdBotController::class, 'store']);
     });
+    Route::get('/bonus-email/verify/{id}/{hash}', [BonusEmailController::class, 'verify'])->middleware(['signed', 'throttle:10,1'])->name('bonus-email.verify');
     Route::get('/csrf', fn () => response()->json(['token' => csrf_token()]));
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login');
@@ -55,6 +57,7 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
         Route::post('/onboarding/seen', [AccountController::class, 'onboarding']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/consent', [AccountController::class, 'consent']);
+        Route::post('/bonus-email/send', [BonusEmailController::class, 'send'])->middleware('throttle:bonus-email');
         Route::post('/welcome-bonus', [AccountController::class, 'claimWelcomeBonus'])->middleware('throttle:10,1');
         Route::get('/ledger', [AccountController::class, 'ledger']);
         Route::get('/calibration/layout', [CalibrationController::class, 'layout']);

@@ -3,7 +3,10 @@
 namespace App\Providers;
 
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -12,6 +15,7 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        RateLimiter::for('bonus-email', fn (Request $request) => Limit::perMinute(1)->by((string) $request->user()->id));
         $resetUrl = fn ($user, string $token) => rtrim(config('app.url'), '/').'/?reset_token='.urlencode($token).'&account_id='.$user->id;
         ResetPassword::createUrlUsing($resetUrl);
         ResetPassword::toMailUsing(fn ($user, string $token) => (new MailMessage)
