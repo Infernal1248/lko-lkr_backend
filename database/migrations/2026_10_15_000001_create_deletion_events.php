@@ -14,8 +14,9 @@ return new class extends Migration
             $table->unsignedBigInteger('actor_id');
             $table->string('resource_type', 20);
             $table->string('resource_id', 40);
-            $table->timestamp('occurred_at')->index();
-            $table->timestamp('retain_until')->index();
+            // DATETIME avoids legacy MySQL TIMESTAMP defaults and its 2038 limit.
+            $table->dateTime('occurred_at')->index();
+            $table->dateTime('retain_until')->index();
             $table->text('evidence');
         });
     }
