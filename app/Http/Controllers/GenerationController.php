@@ -8,6 +8,7 @@ use App\Models\LedgerEntry;
 use App\Models\PrinterProfile;
 use App\Models\User;
 use App\Services\CardInput;
+use App\Services\DeletionEvidence;
 use App\Services\PdfRenderer;
 use App\Services\RegistryData;
 use Illuminate\Http\Request;
@@ -136,8 +137,7 @@ class GenerationController extends Controller
 
     public function destroy(Request $request, string $id): mixed
     {
-        $g = Generation::where('user_id', $request->user()->id)->findOrFail($id);
-        $g->update(['pdf' => null, 'snapshot' => null, 'registry' => null, 'employee_id' => null, 'card_number' => null, 'card_number_hash' => null, 'assigned_at' => null, 'deleted_at' => now()]);
+        DeletionEvidence::generation($request->user()->id, $id);
 
         return response()->noContent();
     }

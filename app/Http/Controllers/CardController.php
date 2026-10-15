@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Card;
 use App\Services\CardInput;
+use App\Services\DeletionEvidence;
 use App\Services\EmployeeImport;
 use App\Services\RegistryData;
 use Illuminate\Http\Request;
@@ -37,7 +38,7 @@ class CardController extends Controller
 
     public function destroy(Request $request, int $id): mixed
     {
-        Card::where('user_id', $request->user()->id)->findOrFail($id)->delete();
+        DeletionEvidence::card($request->user()->id, $id);
 
         return response()->noContent();
     }

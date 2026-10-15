@@ -39,7 +39,7 @@ class AccountController extends Controller
 
     public function consent(Request $request): mixed
     {
-        $request->validate(['accepted' => 'accepted', 'organization' => 'required|string|max:180']);
+        $request->validate(['accepted' => 'accepted', 'organization' => 'required|string|max:180', 'version' => ['required', Rule::in([config('cards.consent_version')])]]);
         Consent::create(['user_id' => $request->user()->id, 'version' => config('cards.consent_version'), 'organization' => ['name' => $request->input('organization')], 'created_at' => now()]);
 
         return ['accepted' => true];

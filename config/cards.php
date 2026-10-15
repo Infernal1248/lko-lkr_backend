@@ -1,8 +1,8 @@
 <?php
 
 return [
-    'consent_version' => '2026-10-11.1',
-    'privacy_version' => '2026-10-12.1',
+    'consent_version' => '2026-10-15.1',
+    'privacy_version' => '2026-10-15.1',
     'operator_name' => env('SERVICE_OPERATOR_NAME', 'Кочергин Владимир Михайлович'),
     'operator_inn' => env('SERVICE_OPERATOR_INN', '242022368804'),
     'operator_address' => env('SERVICE_OPERATOR_ADDRESS', ''),
