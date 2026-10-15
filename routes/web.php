@@ -55,6 +55,7 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
         Route::post('/onboarding/seen', [AccountController::class, 'onboarding']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/consent', [AccountController::class, 'consent']);
+        Route::post('/welcome-bonus', [AccountController::class, 'claimWelcomeBonus'])->middleware('throttle:10,1');
         Route::get('/ledger', [AccountController::class, 'ledger']);
         Route::get('/calibration/layout', [CalibrationController::class, 'layout']);
         Route::get('/calibration/background', [CalibrationController::class, 'background']);
@@ -64,6 +65,7 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
         Route::post('/profiles', [AccountController::class, 'saveProfile']);
         Route::delete('/profiles/{id}', [AccountController::class, 'deleteProfile']);
         Route::post('/calibration/pdf', [GenerationController::class, 'test'])->middleware('throttle:20,1');
+        Route::get('/payments/last-buyer', [PaymentController::class, 'lastBuyer']);
         Route::get('/payments', [PaymentController::class, 'index']);
         Route::post('/payments', [PaymentController::class, 'store'])->middleware('throttle:10,1');
         Route::post('/payments/{id}/refresh', [PaymentController::class, 'refresh'])->middleware('throttle:10,1');

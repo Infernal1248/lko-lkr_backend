@@ -28,6 +28,19 @@ class PaymentController extends Controller
         return Payment::where('user_id', $request->user()->id)->latest()->paginate(30);
     }
 
+    public function lastBuyer(Request $request): array
+    {
+        $payment = Payment::where('user_id', $request->user()->id)
+            ->where('status', 'succeeded')->orderByDesc('paid_at')->orderByDesc('created_at')->orderByDesc('id')->first();
+        $buyer = $payment?->buyer;
+
+        return ['buyer' => $buyer ? [
+            'type' => $buyer['type'] ?? 'company',
+            'name' => $buyer['name'] ?? '',
+            'inn' => ($buyer['type'] ?? 'company') === 'company' ? ($buyer['inn'] ?? '') : '',
+        ] : null];
+    }
+
     public function store(Request $request): mixed
     {
         $request->validate(['package' => ['required', 'string', 'max:64'], 'request_key' => 'required|uuid', 'buyer_type' => 'required|in:person,company', 'buyer_name' => 'required|string|max:180', 'buyer_inn' => ['nullable', 'required_if:buyer_type,company', 'regex:/^(?:[0-9]{10}|[0-9]{12})$/']]);
