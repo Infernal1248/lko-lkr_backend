@@ -60,13 +60,10 @@ class AuthController extends Controller
 
     private function identity(Request $request): ?User
     {
-        $request->merge(['identifier' => $request->input('identifier', $request->input('email', ''))]);
         $data = $request->validate(['identifier' => 'required|string|max:254']);
         $value = mb_strtolower(trim($data['identifier']));
 
-        return str_contains($value, '@')
-            ? User::where('legacy_email', $value)->whereNull('username')->first()
-            : User::where('username', $value)->first();
+        return User::where('username', $value)->first();
     }
 
     public function login(Request $request): mixed
@@ -74,7 +71,7 @@ class AuthController extends Controller
         $request->validate(['password' => 'required|string']);
         $user = $this->identity($request);
         if (! Auth::attempt(['id' => $user?->id ?? 0, 'password' => $request->input('password')])) {
-            throw ValidationException::withMessages(['identifier' => 'Неверный логин или пароль. Если вы ещё не создавали логин, введите прежнюю почту.']);
+            throw ValidationException::withMessages(['identifier' => 'Неверный логин или пароль.']);
         }
         $request->session()->regenerate();
 

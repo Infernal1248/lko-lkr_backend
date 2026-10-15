@@ -17,8 +17,8 @@ class PasswordResetTest extends TestCase
     public function test_reset_mail_is_sent_and_token_cannot_be_reused(): void
     {
         Notification::fake();
-        $user = User::factory()->create();
-        $this->postJson('/api/forgot-password', ['email' => $user->email])->assertOk();
+        $user = User::factory()->create(['username' => 'reset_user']);
+        $this->postJson('/api/forgot-password', ['identifier' => $user->username])->assertOk();
         Notification::assertSentTo($user, ResetPassword::class);
         $token = Password::createToken($user);
         $input = ['email' => $user->email, 'token' => $token, 'password' => 'New-Password-2026', 'password_confirmation' => 'New-Password-2026'];
@@ -48,6 +48,6 @@ class PasswordResetTest extends TestCase
 
     public function test_forgot_password_does_not_reveal_account_existence(): void
     {
-        $this->postJson('/api/forgot-password', ['email' => 'missing@example.test'])->assertOk()->assertJsonPath('message', 'Если аккаунт существует, инструкция отправлена на почту.');
+        $this->postJson('/api/forgot-password', ['identifier' => 'missing_user'])->assertOk()->assertJsonPath('message', 'Если аккаунт существует, инструкция отправлена на почту.');
     }
 }

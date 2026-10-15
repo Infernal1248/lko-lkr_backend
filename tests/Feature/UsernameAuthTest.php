@@ -43,7 +43,7 @@ class UsernameAuthTest extends TestCase
     {
         $user = User::factory()->create(['email' => 'shared@example.test', 'credits' => 37, 'organization' => ['organization_name' => 'Вектор']]);
         $hash = $user->password;
-        $this->postJson('/api/login', ['email' => $user->email, 'password' => 'password'])->assertOk()->assertJsonPath('username', null);
+        $this->actingAs($user);
         $this->postJson('/api/username', ['username' => 'Vektor'])->assertOk()->assertJsonPath('username', 'vektor');
         $this->postJson('/api/username', ['username' => 'another'])->assertConflict();
         $this->assertSame($hash, $user->fresh()->password);
@@ -86,16 +86,24 @@ class UsernameAuthTest extends TestCase
         $this->assertDatabaseCount('password_reset_tokens', 0);
     }
 
-    public function test_legacy_email_login_and_recovery_target_only_original_account(): void
+    public function test_email_is_not_accepted_for_login_or_requesting_recovery(): void
     {
+        $this->withoutMiddleware(ThrottleRequests::class);
         Notification::fake();
         $old = User::factory()->create(['email' => 'shared@example.test']);
         $new = User::factory()->create(['username' => 'newaccount', 'email' => $old->email, 'legacy_email' => null]);
-        $this->postJson('/api/login', ['email' => $old->email, 'password' => 'password'])->assertOk()->assertJsonPath('id', $old->id);
-        $this->postJson('/api/forgot-password', ['email' => $old->email])->assertOk();
-        Notification::assertSentTo($old, ResetPassword::class);
-        Notification::assertNotSentTo($new, ResetPassword::class);
-        $old->update(['username' => 'oldaccount']);
+        foreach ([null, 'oldaccount'] as $username) {
+            $old->update(['username' => $username]);
+            $this->postJson('/api/login', ['email' => $old->email, 'password' => 'password'])->assertUnprocessable();
+            $this->postJson('/api/login', ['identifier' => $old->email, 'password' => 'password'])->assertUnprocessable();
+            $this->assertGuest();
+            $this->postJson('/api/forgot-password', ['email' => $old->email])->assertUnprocessable();
+            $this->postJson('/api/forgot-password', ['identifier' => $old->email])->assertOk();
+        }
+        Notification::assertNothingSent();
+        $this->assertDatabaseCount('password_reset_tokens', 0);
+        $this->postJson('/api/login', ['identifier' => '  OLDACCOUNT  ', 'password' => 'password'])->assertOk()->assertJsonPath('id', $old->id);
+        // Existing links remain usable; this is token verification, not email login.
         $token = Password::createToken($old);
         $this->postJson('/api/reset-password', ['email' => $old->email, 'token' => $token, 'password' => 'Changed-12345', 'password_confirmation' => 'Changed-12345'])->assertOk();
         $this->assertTrue(Hash::check('password', $new->fresh()->password));
