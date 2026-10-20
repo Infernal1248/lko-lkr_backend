@@ -97,7 +97,7 @@ class EmployeeImport
                 $names = $registry
                     ? preg_split('/\s+/u', trim((string) ($row[1] ?? '')), 3)
                     : array_slice($row, 0, 3);
-                $data = array_merge($organization, [
+                $data = array_merge(array_intersect_key($organization, CardInput::demo()), [
                     'surname' => trim((string) ($names[0] ?? '')),
                     'name' => trim((string) ($names[1] ?? '')),
                     'patronymic' => trim((string) ($names[2] ?? '')),

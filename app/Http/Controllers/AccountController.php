@@ -37,7 +37,7 @@ class AccountController extends Controller
 
     public function organization(Request $request): mixed
     {
-        $d = $request->validate(['organization_type' => 'required|string|max:60', 'organization_name' => 'required|string|max:120', 'director_position' => 'required|string|max:60', 'director_name' => 'required|string|max:100']);
+        $d = $request->validate(['inn' => ['nullable', 'string', 'regex:/^(?:[0-9]{10}|[0-9]{12})$/'], 'organization_type' => 'required|string|max:60', 'organization_name' => 'required|string|max:120', 'director_position' => 'required|string|max:60', 'director_name' => 'required|string|max:100']);
         $request->user()->update(['organization' => $d]);
 
         return $d;

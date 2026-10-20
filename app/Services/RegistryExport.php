@@ -24,7 +24,9 @@ class RegistryExport
     {
         $name = trim(($organization['organization_type'] ?? '').' '.($organization['organization_name'] ?? ''));
 
-        return 'Реестр учета выдачи ЛКО и ЛКР  '.($name !== '' ? $name : 'ООО ЧОО "                     "');
+        $inn = trim($organization['inn'] ?? '');
+
+        return 'Реестр учета выдачи ЛКО и ЛКР  '.($name !== '' ? $name : 'ООО ЧОО "                     "').($inn !== '' ? "\nИНН ".$inn : '');
     }
 
     private function date(?string $value): string
@@ -59,6 +61,13 @@ class RegistryExport
         $sheet->getStyle('B5:M'.$last)->getAlignment()->setHorizontal('left')->setVertical('top')->setWrapText(true);
         $sheet->getStyle('A4:M'.$last)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FF000000');
         $metrics = app(PdfRenderer::class)->registryDocument();
+        if (! empty($organization['inn'])) {
+            $sheet->mergeCells('G2:M2');
+            $sheet->getStyle('G2')->getAlignment()->setWrapText(true)->setVertical('top');
+            $width = array_sum(array_map(fn ($column) => ($sheet->getColumnDimension($column)->getWidth() * 7 + 5) * 25.4 / 96, range('G', 'M')));
+            $metrics->SetFont('liberationserif', '', 14, resource_path('fonts/liberationserif.json'));
+            $sheet->getRowDimension(2)->setRowHeight(max(37.5, count($this->lines($metrics, $this->title($organization), $width)) * 18.75));
+        }
         $metrics->SetFont('liberationsans', '', 11, resource_path('fonts/liberationsans.json'));
         foreach ($items->values() as $index => $g) {
             $row = $this->row($g, $index + 1);
