@@ -18,7 +18,7 @@ class OrganizationInnTest extends TestCase
     {
         $user = User::factory()->create();
         Consent::create(['user_id' => $user->id, 'version' => config('cards.consent_version'), 'organization' => ['name' => 'Тест'], 'created_at' => now()]);
-        $organization = ['organization_type' => 'ООО ЧОО', 'organization_name' => '«Тест»', 'director_position' => 'Директор', 'director_name' => 'И. И. Тестов', 'inn' => '0123456789'];
+        $organization = ['organization_type' => 'ООО ЧОО', 'organization_name' => 'Тест', 'director_position' => 'Директор', 'director_name' => 'И. И. Тестов', 'inn' => '0123456789'];
         $this->actingAs($user)->putJson('/api/organization', $organization)->assertOk()->assertJsonPath('inn', '0123456789');
         $this->assertSame('0123456789', $user->fresh()->organization['inn']);
         $this->getJson('/api/me')->assertJsonPath('user.organization.inn', '0123456789');
@@ -26,8 +26,9 @@ class OrganizationInnTest extends TestCase
         try {
             file_put_contents($file, $this->get('/api/registry/export/xlsx')->assertOk()->getContent());
             $book = IOFactory::load($file);
-            $this->assertSame("Реестр учета выдачи ЛКО и ЛКР  ООО ЧОО «Тест»\nИНН 0123456789", $book->getActiveSheet()->getCell('G2')->getValue());
-            $this->assertTrue($book->getActiveSheet()->getStyle('G2')->getAlignment()->getWrapText());
+            $this->assertSame('Реестр учета выдачи ЛКО и ЛКР  ООО ЧОО «Тест», ИНН 0123456789', $book->getActiveSheet()->getCell('G2')->getValue());
+            $this->assertFalse($book->getActiveSheet()->getStyle('G2')->getAlignment()->getWrapText());
+            $this->assertTrue($book->getActiveSheet()->getStyle('G2')->getAlignment()->getShrinkToFit());
             $book->disconnectWorksheets();
         } finally {
             unlink($file);

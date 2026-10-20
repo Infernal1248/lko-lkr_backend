@@ -22,11 +22,16 @@ class RegistryExport
 
     private function title(array $organization): string
     {
-        $name = trim(($organization['organization_type'] ?? '').' '.($organization['organization_name'] ?? ''));
+        $organizationName = trim($organization['organization_name'] ?? '');
+        if ($organizationName !== '' && ! preg_match('/^(?:«.*»|".*"|“.*”)$/us', $organizationName)) {
+            $organizationName = '«'.$organizationName.'»';
+        }
+        $name = trim(($organization['organization_type'] ?? '').' '.$organizationName);
+        $name = preg_replace('/\s+/u', ' ', $name);
 
         $inn = trim($organization['inn'] ?? '');
 
-        return 'Реестр учета выдачи ЛКО и ЛКР  '.($name !== '' ? $name : 'ООО ЧОО "                     "').($inn !== '' ? "\nИНН ".$inn : '');
+        return 'Реестр учета выдачи ЛКО и ЛКР  '.($name !== '' ? $name : 'ООО ЧОО "                     "').($inn !== '' ? ', ИНН '.$inn : '');
     }
 
     private function date(?string $value): string
@@ -61,13 +66,8 @@ class RegistryExport
         $sheet->getStyle('B5:M'.$last)->getAlignment()->setHorizontal('left')->setVertical('top')->setWrapText(true);
         $sheet->getStyle('A4:M'.$last)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FF000000');
         $metrics = app(PdfRenderer::class)->registryDocument();
-        if (! empty($organization['inn'])) {
-            $sheet->mergeCells('G2:M2');
-            $sheet->getStyle('G2')->getAlignment()->setWrapText(true)->setVertical('top');
-            $width = array_sum(array_map(fn ($column) => ($sheet->getColumnDimension($column)->getWidth() * 7 + 5) * 25.4 / 96, range('G', 'M')));
-            $metrics->SetFont('liberationserif', '', 14, resource_path('fonts/liberationserif.json'));
-            $sheet->getRowDimension(2)->setRowHeight(max(37.5, count($this->lines($metrics, $this->title($organization), $width)) * 18.75));
-        }
+        $sheet->mergeCells('G2:M2');
+        $sheet->getStyle('G2')->getAlignment()->setWrapText(false)->setShrinkToFit(true);
         $metrics->SetFont('liberationsans', '', 11, resource_path('fonts/liberationsans.json'));
         foreach ($items->values() as $index => $g) {
             $row = $this->row($g, $index + 1);
@@ -165,9 +165,14 @@ class RegistryExport
         $titleX = 10 + array_sum(array_slice($widths, 0, 6));
         $header = function () use ($pdf, $widths, $headings, $title, $titleX, $headerSize, $bodySize, $scale, $headerLineHeight): void {
             $pdf->SetFont('liberationserif', '', $headerSize, resource_path('fonts/liberationserif.json'));
-            $titleLines = $this->lines($pdf, $title, 410 - $titleX);
-            $titleHeight = max(25 * $scale, count($titleLines) * $headerLineHeight);
-            $this->textLines($pdf, $titleLines, $titleX, 10 + 25 * $scale, 410 - $titleX, $headerLineHeight, 'L');
+            $titleWidth = 410 - $titleX;
+            $textWidth = $pdf->GetStringWidth($title);
+            if ($textWidth > $titleWidth - 1.5) {
+                $pdf->SetFontSize($headerSize * ($titleWidth - 1.5) / $textWidth);
+            }
+            $titleHeight = 25 * $scale;
+            $this->textLines($pdf, [$title], $titleX, 10 + 25 * $scale, $titleWidth, $headerLineHeight, 'L');
+            $pdf->SetFontSize($headerSize);
             $y = 10 + 50 * $scale + $titleHeight;
             $cells = [];
             foreach ($headings as $i => $text) {
