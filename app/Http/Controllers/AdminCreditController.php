@@ -14,17 +14,21 @@ class AdminCreditController extends Controller
     public function index(Request $request): mixed
     {
         abort_unless($request->user()->is_support_admin, 403);
-        $data = $request->validate(['search' => ['nullable', 'string', 'max:255']]);
+        $data = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+        ]);
         $search = trim($data['search'] ?? '');
 
-        return User::select('id', 'name', 'email', 'username', 'credits')
+        $users = User::select('id', 'name', 'email', 'username', 'credits')
             ->addSelect([
                 'employees_count' => Card::selectRaw('count(*)')->whereColumn('cards.user_id', 'users.id'),
                 'registry_count' => Generation::selectRaw('count(*)')->whereColumn('generations.user_id', 'users.id')->whereNull('deleted_at'),
             ])
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q
                 ->where('username', 'like', '%'.$search.'%')->orWhere('email', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%')))
-            ->orderBy('id')->paginate(20);
+            ->orderBy('id')->get();
+
+        return ['data' => $users, 'total' => $users->count()];
     }
 
     public function store(Request $request): mixed

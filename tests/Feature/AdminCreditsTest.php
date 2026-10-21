@@ -91,6 +91,15 @@ class AdminCreditsTest extends TestCase
         $this->postJson('/api/admin/credits', [...$payload, 'amount' => -3, 'request_key' => (string) Str::uuid()])->assertOk()->assertJsonPath('user.credits', 0);
     }
 
+    public function test_all_matching_accounts_are_returned_for_datatable_sorting_and_pagination(): void
+    {
+        $admin = User::factory()->create(['is_support_admin' => true]);
+        $users = User::factory()->count(23)->create(['name' => 'Matching account']);
+        $response = $this->actingAs($admin)->getJson('/api/admin/accounts?search=Matching')->assertOk()
+            ->assertJsonPath('total', 23)->assertJsonCount(23, 'data');
+        $this->assertSame($users->pluck('id')->all(), array_column($response->json('data'), 'id'));
+    }
+
     public function test_invalid_amounts_and_missing_accounts_cannot_change_balance(): void
     {
         $admin = User::factory()->create(['is_support_admin' => true, 'credits' => 0]);
