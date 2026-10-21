@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Card;
 use App\Models\Generation;
+use App\Models\LedgerEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -48,7 +49,7 @@ class AdminCreditsTest extends TestCase
         $user = User::factory()->create(['name' => 'Иван Образцов', 'email' => 'find@example.test']);
         foreach (['Образцов', 'find@example.test'] as $search) {
             $response = $this->actingAs($admin)->getJson('/api/admin/accounts?search='.urlencode($search))->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $user->id);
-            $this->assertEqualsCanonicalizing(['id', 'name', 'email', 'username', 'credits', 'employees_count', 'registry_count'], array_keys($response->json('data.0')));
+            $this->assertEqualsCanonicalizing(['id', 'name', 'email', 'username', 'credits', 'employees_count', 'registry_count', 'welcome_bonus_activated'], array_keys($response->json('data.0')));
         }
     }
 
@@ -98,6 +99,22 @@ class AdminCreditsTest extends TestCase
         $response = $this->actingAs($admin)->getJson('/api/admin/accounts?search=Matching')->assertOk()
             ->assertJsonPath('total', 23)->assertJsonCount(23, 'data');
         $this->assertSame($users->pluck('id')->all(), array_column($response->json('data'), 'id'));
+    }
+
+    public function test_bonus_status_marks_only_actual_recipient_not_accounts_sharing_email(): void
+    {
+        $admin = User::factory()->create(['is_support_admin' => true]);
+        $recipient = User::factory()->create();
+        $other = User::factory()->create(['email' => $recipient->email, 'legacy_email' => null]);
+        LedgerEntry::create(['user_id' => $recipient->id, 'amount' => 3, 'balance' => 3,
+            'reason' => 'welcome_bonus', 'reference' => 'welcome:'.$recipient->id, 'created_at' => now()]);
+        LedgerEntry::create(['user_id' => $other->id, 'amount' => 3, 'balance' => 3,
+            'reason' => 'manual', 'reference' => 'manual:test', 'created_at' => now()]);
+        $response = $this->actingAs($admin)->getJson('/api/admin/accounts')->assertOk();
+        $accounts = collect($response->json('data'))->keyBy('id');
+        $this->assertTrue($accounts[$recipient->id]['welcome_bonus_activated']);
+        $this->assertFalse($accounts[$other->id]['welcome_bonus_activated']);
+        $this->assertFalse($accounts[$admin->id]['welcome_bonus_activated']);
     }
 
     public function test_invalid_amounts_and_missing_accounts_cannot_change_balance(): void

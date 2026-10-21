@@ -23,9 +23,11 @@ class AdminCreditController extends Controller
             ->addSelect([
                 'employees_count' => Card::selectRaw('count(*)')->whereColumn('cards.user_id', 'users.id'),
                 'registry_count' => Generation::selectRaw('count(*)')->whereColumn('generations.user_id', 'users.id')->whereNull('deleted_at'),
+                'welcome_bonus_activated' => LedgerEntry::selectRaw('count(*) > 0')->whereColumn('ledger_entries.user_id', 'users.id')->where('reason', 'welcome_bonus'),
             ])
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q
                 ->where('username', 'like', '%'.$search.'%')->orWhere('email', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%')))
+            ->withCasts(['welcome_bonus_activated' => 'boolean'])
             ->orderBy('id')->get();
 
         return ['data' => $users, 'total' => $users->count()];
