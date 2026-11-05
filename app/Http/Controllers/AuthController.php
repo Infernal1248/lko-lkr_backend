@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PushSubscription;
 use App\Models\User;
+use App\Services\RegistrationVerification;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -22,12 +23,19 @@ class AuthController extends Controller
         $request->validate(['email' => 'required|string', 'username' => 'required|string'], $this->usernameMessages());
         $request->merge(['email' => mb_strtolower(trim((string) $request->input('email'))), 'username' => strtolower(trim((string) $request->input('username')))]);
         $d = $request->validate(['name' => 'required|string|max:100', 'email' => 'required|email|max:254', 'username' => $this->usernameRules(), 'password' => ['required', 'confirmed', PasswordRule::min(12)->letters()->numbers()], 'terms' => 'accepted', 'privacy' => 'accepted'], $this->usernameMessages());
+        abort_if($request->user(), 409, 'Сначала выйдите из текущего аккаунта.');
+        app(RegistrationVerification::class)->check($request, $d['email']);
         try {
-            $u = User::create($d);
+            $u = DB::transaction(function () use ($d) {
+                $user = new User($d);
+                $user->forceFill(['email_verified_at' => now(), 'privacy_accepted_at' => now(), 'privacy_version' => config('cards.privacy_version')])->save();
+
+                return $user;
+            });
         } catch (QueryException $e) {
             $this->usernameConflict($e);
         }
-        $u->forceFill(['privacy_accepted_at' => now(), 'privacy_version' => config('cards.privacy_version')])->save();
+        $request->session()->forget('registration_verification');
         Auth::login($u);
         $request->session()->regenerate();
 

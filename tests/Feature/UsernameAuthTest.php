@@ -10,10 +10,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
+use Tests\Concerns\ConfirmsRegistration;
 use Tests\TestCase;
 
 class UsernameAuthTest extends TestCase
 {
+    use ConfirmsRegistration;
     use RefreshDatabase;
 
     private function registration(string $username): array
@@ -23,9 +25,9 @@ class UsernameAuthTest extends TestCase
 
     public function test_shared_email_accounts_have_unique_case_insensitive_logins(): void
     {
-        $a = $this->postJson('/api/register', $this->registration('  Vektor  '))->assertCreated()->assertJsonPath('username', 'vektor')->json('id');
+        $a = $this->registerConfirmed($this->registration('  Vektor  '))->assertCreated()->assertJsonPath('username', 'vektor')->json('id');
         $this->postJson('/api/logout');
-        $b = $this->postJson('/api/register', $this->registration('rubezh'))->assertCreated()->json('id');
+        $b = $this->registerConfirmed($this->registration('rubezh'))->assertCreated()->json('id');
         $this->assertNotSame($a, $b);
         $this->postJson('/api/logout');
         $this->postJson('/api/login', ['identifier' => 'VEKTOR', 'password' => 'Password-12345'])->assertOk()->assertJsonPath('id', $a);

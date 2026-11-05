@@ -11,10 +11,12 @@ use App\Services\PdfRenderer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\ConfirmsRegistration;
 use Tests\TestCase;
 
 class CardServiceTest extends TestCase
 {
+    use ConfirmsRegistration;
     use RefreshDatabase;
 
     private function account(int $credits = 3): User
@@ -115,7 +117,7 @@ class CardServiceTest extends TestCase
 
     public function test_registration_login_and_logout(): void
     {
-        $this->postJson('/api/register', ['username' => 'test_user', 'name' => 'Тестовый пользователь', 'email' => 'test@example.test', 'password' => 'LongPassword123', 'password_confirmation' => 'LongPassword123', 'terms' => true, 'privacy' => true])->assertCreated();
+        $this->registerConfirmed(['username' => 'test_user', 'name' => 'Тестовый пользователь', 'email' => 'test@example.test', 'password' => 'LongPassword123', 'password_confirmation' => 'LongPassword123', 'terms' => true, 'privacy' => true])->assertCreated();
         $this->getJson('/api/me')->assertOk();
         $this->postJson('/api/logout')->assertNoContent();
         $this->postJson('/api/login', ['identifier' => 'test_user', 'password' => 'wrong'])->assertUnprocessable();

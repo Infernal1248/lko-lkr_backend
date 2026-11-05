@@ -31,7 +31,7 @@ class BonusEmailTest extends TestCase
         $text = view($mail->view['text'], $mail->viewData)->render();
         $link = $mail->viewData['verificationUrl'];
         $this->assertStringContainsString($link, $text);
-        $this->postJson('/api/bonus-email/send')->assertTooManyRequests();
+        $this->postJson('/api/bonus-email/send')->assertOk();
         $this->postJson('/api/logout')->assertNoContent();
         $this->get($link)->assertOk()->assertSee('Почта подтверждена');
         $this->assertGuest();

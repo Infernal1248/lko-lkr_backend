@@ -15,10 +15,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Tests\Concerns\ConfirmsRegistration;
 use Tests\TestCase;
 
 class RegistryAndSupportTest extends TestCase
 {
+    use ConfirmsRegistration;
     use RefreshDatabase;
 
     private function account(): User
@@ -196,7 +198,7 @@ class RegistryAndSupportTest extends TestCase
         $d = ['name' => 'Тест', 'email' => 'privacy@example.test', 'password' => 'Password123456', 'password_confirmation' => 'Password123456', 'terms' => true, 'is_support_admin' => true];
         $this->postJson('/api/register', $d + ['username' => 'test_user'])->assertUnprocessable()->assertJsonValidationErrors('privacy');
         $d['privacy'] = true;
-        $this->postJson('/api/register', $d + ['username' => 'test_user'])->assertCreated();
+        $this->registerConfirmed($d + ['username' => 'test_user'])->assertCreated();
         $u = User::first();
         $this->assertFalse($u->is_support_admin);
         $this->assertNotNull($u->privacy_accepted_at);

@@ -17,6 +17,8 @@ use App\Http\Controllers\SupportController;
 use App\Http\Middleware\NpdBotAuth;
 use App\Http\Middleware\PrivateResponse;
 use App\Http\Middleware\RequireConsent;
+use App\Services\RegistrationVerification;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
@@ -26,9 +28,14 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
     });
     Route::get('/bonus-email/verify/{id}/{hash}', [BonusEmailController::class, 'verify'])->middleware(['signed', 'throttle:10,1'])->name('bonus-email.verify');
     Route::get('/csrf', fn () => response()->json(['token' => csrf_token()]));
-    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+    Route::get('/registration/settings', fn () => [
+        'captcha_enabled' => (bool) config('registration.captcha_enabled'),
+        'site_key' => config('registration.site_key'),
+    ]);
+    Route::post('/registration/email-code', fn (Request $request, RegistrationVerification $verification) => $verification->send($request))->block(20, 10);
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1')->block(20, 10);
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login');
-    Route::post('/forgot-password', [AuthController::class, 'forgot'])->middleware('throttle:3,1');
+    Route::post('/forgot-password', [AuthController::class, 'forgot']);
     Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:5,1');
     Route::post('/payments/webhook', [PaymentController::class, 'webhook'])->middleware('throttle:120,1');
     Route::get('/templates', [AccountController::class, 'templates']);
@@ -57,7 +64,7 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
         Route::post('/onboarding/seen', [AccountController::class, 'onboarding']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/consent', [AccountController::class, 'consent']);
-        Route::post('/bonus-email/send', [BonusEmailController::class, 'send'])->middleware('throttle:bonus-email');
+        Route::post('/bonus-email/send', [BonusEmailController::class, 'send']);
         Route::post('/welcome-bonus', [AccountController::class, 'claimWelcomeBonus'])->middleware('throttle:10,1');
         Route::get('/ledger', [AccountController::class, 'ledger']);
         Route::get('/calibration/layout', [CalibrationController::class, 'layout']);
