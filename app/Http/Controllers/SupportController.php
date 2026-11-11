@@ -14,7 +14,10 @@ class SupportController extends Controller
 
     private function ticket(Request $r, int $id): SupportTicket
     {
-        $q = SupportTicket::query();
+        $q = SupportTicket::query()->withUnreadReply();
+        if ($r->user()->is_support_admin) {
+            $q->with('user:id,name,username,email');
+        }
         if (! $r->user()->is_support_admin) {
             $q->where('user_id', $r->user()->id);
         }
@@ -24,7 +27,10 @@ class SupportController extends Controller
 
     public function index(Request $r): mixed
     {
-        $q = SupportTicket::query();
+        $q = SupportTicket::query()->withUnreadReply();
+        if ($r->user()->is_support_admin) {
+            $q->with('user:id,name,username,email');
+        }
         if (! $r->user()->is_support_admin) {
             $q->where('user_id', $r->user()->id);
         }
@@ -35,11 +41,29 @@ class SupportController extends Controller
     public function show(Request $r, int $id): array
     {
         $t = $this->ticket($r, $id);
-        if ($t->user_id === $r->user()->id) {
-            $t->update(['user_read_at' => now()]);
+        $messages = SupportMessage::where('ticket_id', $id)->orderBy('id');
+        $page = $r->has('page') ? max(1, (int) $r->input('page')) : max(1, (int) ceil((clone $messages)->count() / 50));
+        $result = $messages->paginate(50, ['*'], 'page', $page);
+        if ((int) $t->user_id === (int) $r->user()->id && ! $r->user()->is_support_admin && $result->currentPage() === $result->lastPage()) {
+            $lastRead = $result->getCollection()->where('from_support', true)->max('created_at');
+            if ($lastRead && (! $t->user_read_at || $t->user_read_at->lt($lastRead))) {
+                // Reading must not move the ticket to the top of the activity feed.
+                $t->timestamps = false;
+                $t->update(['user_read_at' => $lastRead]);
+                $t->timestamps = true;
+                $t->refresh()->loadExists(['messages as has_unread_reply' => fn ($q) => $q->where('from_support', true)->where('created_at', '>', $lastRead)]);
+            }
         }
 
-        return ['ticket' => $t, 'messages' => SupportMessage::where('ticket_id', $id)->orderBy('id')->paginate(50)];
+        return ['ticket' => $t, 'messages' => $result];
+    }
+
+    public function unread(Request $r): array
+    {
+        $count = SupportTicket::where('user_id', $r->user()->id)->whereHas('messages', fn ($q) => $q->where('from_support', true)
+            ->where(fn ($q) => $q->whereNull('support_tickets.user_read_at')->orWhereColumn('support_messages.created_at', '>', 'support_tickets.user_read_at')))->count();
+
+        return ['count' => $count];
     }
 
     public function store(Request $r): mixed
@@ -65,7 +89,7 @@ class SupportController extends Controller
             $t = $this->ticket($r, $id);
             $admin = (bool) $r->user()->is_support_admin;
             $m = SupportMessage::create(['ticket_id' => $t->id, 'author_id' => $r->user()->id, 'from_support' => $admin, 'body' => $d['body']]);
-            $t->update(['status' => $admin ? 'answered' : 'open', 'updated_at' => now()]);
+            $t->update(['status' => $admin ? 'answered' : 'open', 'updated_at' => now()] + ($admin ? ['user_read_at' => null] : []));
 
             return response()->json($m, 201);
         });

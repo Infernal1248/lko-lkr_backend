@@ -57,6 +57,7 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
         Route::put('/receipts/{id}', [ReceiptController::class, 'update']);
         Route::get('/support', [SupportController::class, 'index']);
         Route::post('/support', [SupportController::class, 'store'])->middleware('throttle:10,1');
+        Route::get('/support/unread', [SupportController::class, 'unread']);
         Route::get('/support/{id}', [SupportController::class, 'show']);
         Route::post('/support/{id}/messages', [SupportController::class, 'reply'])->middleware('throttle:20,1');
         Route::post('/support/{id}/close', [SupportController::class, 'close']);
