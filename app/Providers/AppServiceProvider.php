@@ -12,7 +12,7 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $resetUrl = fn ($user, string $token) => rtrim(config('app.url'), '/').'/?reset_token='.urlencode($token).'&account_id='.$user->id;
+        $resetUrl = fn ($user, string $token) => rtrim(config('app.url'), '/').'/app/reset-password?reset_token='.urlencode($token).'&account_id='.$user->id;
         ResetPassword::createUrlUsing($resetUrl);
         ResetPassword::toMailUsing(fn ($user, string $token) => (new MailMessage)
             ->subject('Восстановление пароля — ЛКО / ЛКР')

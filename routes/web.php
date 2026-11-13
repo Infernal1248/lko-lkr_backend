@@ -11,6 +11,7 @@ use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\NpdBotController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PushController;
+use App\Http\Controllers\PublicSiteController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\RegistryController;
 use App\Http\Controllers\SupportController;
@@ -39,7 +40,7 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
     Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:5,1');
     Route::post('/payments/webhook', [PaymentController::class, 'webhook'])->middleware('throttle:120,1');
     Route::get('/templates', [AccountController::class, 'templates']);
-    Route::get('/public-settings', fn () => ['operator_name' => config('cards.operator_name'), 'operator_inn' => config('cards.operator_inn'), 'operator_address' => config('cards.operator_address'), 'privacy_email' => config('cards.privacy_email'), 'privacy_version' => config('cards.privacy_version')]);
+    Route::get('/public-settings', fn (Request $request) => ['operator_name' => config('cards.operator_name'), 'operator_inn' => config('cards.operator_inn'), 'operator_address' => config('cards.operator_address'), 'privacy_email' => config('cards.privacy_email'), 'privacy_version' => config('cards.privacy_version'), 'authenticated' => $request->user() !== null]);
     Route::get('/packages', [PaymentController::class, 'packages']);
     Route::middleware('auth')->group(function () {
         Route::post('/username', [AuthController::class, 'chooseUsername'])->middleware('throttle:10,1');
@@ -100,14 +101,25 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
     });
 });
 Route::get('/push-sw.js', function () {
-    $file = public_path('app/push-sw.js');
+    $file = public_path('app-assets/push-sw.js');
     abort_unless(is_file($file), 404);
 
     return response()->file($file, ['Content-Type' => 'application/javascript', 'Cache-Control' => 'no-cache', 'Service-Worker-Allowed' => '/']);
 });
-Route::get('/{path?}', function () {
-    $file = public_path('app/index.html');
-    abort_unless(is_file($file), 503, 'Соберите Vue-приложение: npm run build в frontend.');
+Route::get('/', [PublicSiteController::class, 'home']);
+Route::get('/sitemap.xml', [PublicSiteController::class, 'sitemap']);
+Route::get('/site.css', [PublicSiteController::class, 'legacySiteStyle']);
+Route::get('/site-images/{asset}', [PublicSiteController::class, 'legacySiteImage'])->where('asset', '[a-zA-Z0-9_.-]+');
 
-    return response()->file($file, ['Cache-Control' => 'no-cache']);
-})->where('path', '^(?!api(?:/|$)).*');
+Route::get('/app/dashboard', [PublicSiteController::class, 'legacyCabinet']);
+Route::get('/app/index.html', [PublicSiteController::class, 'legacyCabinet']);
+Route::get('/app/{path?}', [PublicSiteController::class, 'cabinet'])
+    ->where('path', '(?:login|register|privacy|reset-password|new|history|employees|employee(?:/[1-9][0-9]*)?|calibration|organization|billing|support|help|receipts|admin-credits|admin-packages)');
+
+// Public app routes are virtual; frontend files live separately in /app-assets/.
+Route::get('/{path}', [PublicSiteController::class, 'legacyCabinet'])
+    ->where('path', '(?:login|register|dashboard|new|history|employees|employee(?:/[1-9][0-9]*)?|calibration|organization|billing|support|help|receipts|admin-credits|admin-packages)');
+Route::get('/app/{asset}', [PublicSiteController::class, 'legacyAsset'])
+    ->where('asset', '(?:assets|help)/.+|favicon(?:-[0-9]+)?\.(?:ico|png|svg)|(?:icon(?:-[0-9]+)?|apple-touch-icon)\.(?:png|svg)|manifest\.webmanifest|push-sw\.js');
+Route::get('/{slug}', [PublicSiteController::class, 'page'])->where('slug', '[a-z][a-z0-9-]*');
+Route::fallback([PublicSiteController::class, 'notFound']);

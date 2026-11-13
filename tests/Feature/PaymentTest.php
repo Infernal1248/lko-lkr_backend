@@ -63,7 +63,8 @@ class PaymentTest extends TestCase
         Http::fake(['api.yookassa.ru/*' => Http::response(['id' => 'another-payment', 'test' => true, 'confirmation' => ['confirmation_url' => 'https://yookassa.ru/test']])]);
         $data = ['buyer_type' => 'person', 'buyer_name' => 'Тестовый покупатель', 'package' => 'start', 'request_key' => (string) Str::uuid(), 'amount' => 1, 'credits' => 9999];
         $this->actingAs($user);
-        $this->postJson('/api/payments', $data)->assertSuccessful()->assertJsonPath('amount', 49000)->assertJsonPath('credits', 25);
+        $order = $this->postJson('/api/payments', $data)->assertSuccessful()->assertJsonPath('amount', 49000)->assertJsonPath('credits', 25)->json('id');
+        Http::assertSent(fn ($request) => $request['confirmation']['return_url'] === rtrim(config('app.url'), '/').'/app/billing?payment='.$order);
         $this->postJson('/api/payments', $data)->assertOk();
         Http::assertSentCount(1);
     }

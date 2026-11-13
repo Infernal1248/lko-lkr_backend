@@ -68,7 +68,7 @@ class PushTest extends TestCase
         $as = $this->sub($admin);
         $this->mock(WebPushSender::class)->shouldReceive('send')->once()->withArgs(fn ($subs, $payload) => $subs->pluck('id')->all() === [$as->id] && ! str_contains(json_encode($payload), 'secret'))->andReturn([$as->id => 201]);
         $id = $this->actingAs($u)->postJson('/api/support', ['subject' => 'secret', 'body' => 'secret'])->assertCreated()->json('id');
-        $this->mock(WebPushSender::class)->shouldReceive('send')->once()->withArgs(fn ($subs, $payload) => $subs->pluck('id')->all() === [$us->id] && $payload['url'] === '/?push=support&ticket='.$id)->andThrow(new \RuntimeException('offline'));
+        $this->mock(WebPushSender::class)->shouldReceive('send')->once()->withArgs(fn ($subs, $payload) => $subs->pluck('id')->all() === [$us->id] && $payload['url'] === '/app/support?push=support&ticket='.$id)->andThrow(new \RuntimeException('offline'));
         $this->actingAs($admin)->postJson('/api/support/'.$id.'/messages', ['body' => 'Ответ'])->assertCreated();
         $this->assertDatabaseCount('support_messages', 2);
     }

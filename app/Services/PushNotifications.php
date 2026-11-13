@@ -40,7 +40,7 @@ class PushNotifications
         $this->recipients($users, [
             'title' => $fromSupport ? 'Поддержка ответила' : 'Новое сообщение в поддержку',
             'body' => $fromSupport ? 'Откройте обращение, чтобы прочитать ответ.' : 'Пользователь ожидает ответа. Откройте обращение.',
-            'url' => '/?push=support&ticket='.$ticket->id,
+            'url' => '/app/support?push=support&ticket='.$ticket->id,
             'tag' => 'support-'.$ticket->id,
         ]);
     }
@@ -54,7 +54,7 @@ class PushNotifications
         $this->recipients(User::where('is_support_admin', true)->pluck('id')->all(), [
             'title' => $test ? 'Тестовая оплата прошла' : 'Получена новая оплата',
             'body' => $test ? 'Это тестовый платёж. Чек НПД не нужен.' : ($payment->receipt_mode === 'npd_manual' ? 'Сформируйте чек в «Моём налоге» и прикрепите его в кабинете.' : 'Платёж подтверждён. Проверьте оформление чека.'),
-            'url' => '/?push=receipts',
+            'url' => '/app/receipts?push=receipts',
             'tag' => 'payment-'.$payment->id,
         ]);
     }

@@ -33,7 +33,7 @@ class YooKassa
 
         $payload = [
             'amount' => $amount, 'capture' => true,
-            'confirmation' => ['type' => 'redirect', 'return_url' => config('app.url').'/?payment='.$payment->id],
+            'confirmation' => ['type' => 'redirect', 'return_url' => rtrim(config('app.url'), '/').'/app/billing?payment='.$payment->id],
             'description' => 'Пакет: '.$payment->credits.' генераций ЛКО/ЛКР',
             'metadata' => ['order_id' => $payment->id],
         ];
