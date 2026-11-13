@@ -10,8 +10,8 @@ use App\Http\Controllers\CardController;
 use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\NpdBotController;
 use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\PushController;
 use App\Http\Controllers\PublicSiteController;
+use App\Http\Controllers\PushController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\RegistryController;
 use App\Http\Controllers\SupportController;
@@ -100,12 +100,7 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
         });
     });
 });
-Route::get('/push-sw.js', function () {
-    $file = public_path('app-assets/push-sw.js');
-    abort_unless(is_file($file), 404);
-
-    return response()->file($file, ['Content-Type' => 'application/javascript', 'Cache-Control' => 'no-cache', 'Service-Worker-Allowed' => '/']);
-});
+Route::get('/push-sw.js', [PublicSiteController::class, 'pushWorker']);
 Route::get('/', [PublicSiteController::class, 'home']);
 Route::get('/sitemap.xml', [PublicSiteController::class, 'sitemap']);
 Route::get('/site.css', [PublicSiteController::class, 'legacySiteStyle']);
@@ -116,10 +111,11 @@ Route::get('/app/index.html', [PublicSiteController::class, 'legacyCabinet']);
 Route::get('/app/{path?}', [PublicSiteController::class, 'cabinet'])
     ->where('path', '(?:login|register|privacy|reset-password|new|history|employees|employee(?:/[1-9][0-9]*)?|calibration|organization|billing|support|help|receipts|admin-credits|admin-packages)');
 
-// Public app routes are virtual; frontend files live separately in /app-assets/.
+// Cabinet URLs must keep working even when the build lives in public/app.
 Route::get('/{path}', [PublicSiteController::class, 'legacyCabinet'])
     ->where('path', '(?:login|register|dashboard|new|history|employees|employee(?:/[1-9][0-9]*)?|calibration|organization|billing|support|help|receipts|admin-credits|admin-packages)');
-Route::get('/app/{asset}', [PublicSiteController::class, 'legacyAsset'])
-    ->where('asset', '(?:assets|help)/.+|favicon(?:-[0-9]+)?\.(?:ico|png|svg)|(?:icon(?:-[0-9]+)?|apple-touch-icon)\.(?:png|svg)|manifest\.webmanifest|push-sw\.js');
+Route::get('/{build}/{asset}', [PublicSiteController::class, 'legacyAsset'])
+    ->where('build', 'app|app-assets')
+    ->where('asset', '(?:assets|help|site-images)/.+|favicon(?:-[0-9]+)?\.(?:ico|png|svg)|(?:icon(?:-[0-9]+)?|apple-touch-icon)\.(?:png|svg)|manifest\.webmanifest|push-sw\.js');
 Route::get('/{slug}', [PublicSiteController::class, 'page'])->where('slug', '[a-z][a-z0-9-]*');
 Route::fallback([PublicSiteController::class, 'notFound']);

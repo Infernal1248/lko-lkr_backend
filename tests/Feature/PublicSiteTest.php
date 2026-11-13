@@ -20,25 +20,25 @@ class PublicSiteTest extends TestCase
         config(['site.url' => 'https://xn----stbbbcqr.xn--p1ai']);
         // Independent of a locally deployed frontend; never overwrite its build.
         $this->temporaryPublic = sys_get_temp_dir().'/lko-seo-'.bin2hex(random_bytes(8));
-        File::ensureDirectoryExists($this->temporaryPublic.'/app-assets/assets');
-        File::ensureDirectoryExists($this->temporaryPublic.'/app-assets/site');
-        File::ensureDirectoryExists($this->temporaryPublic.'/app-assets/site-images');
-        File::put($this->temporaryPublic.'/app-assets/cabinet.html', '<html><head><meta name="robots" content="noindex, follow"></head><body>cabinet-fixture</body></html>');
-        File::put($this->temporaryPublic.'/app-assets/assets/old.js', '/* old build */');
-        File::put($this->temporaryPublic.'/app-assets/push-sw.js', '/* worker */');
+        File::ensureDirectoryExists($this->temporaryPublic.'/app/assets');
+        File::ensureDirectoryExists($this->temporaryPublic.'/app/site');
+        File::ensureDirectoryExists($this->temporaryPublic.'/app/site-images');
+        File::put($this->temporaryPublic.'/app/cabinet.html', '<html><head><meta name="robots" content="noindex, follow"></head><body>cabinet-fixture</body></html>');
+        File::put($this->temporaryPublic.'/app/assets/old.js', '/* old build */');
+        File::put($this->temporaryPublic.'/app/push-sw.js', '/* worker */');
         $origin = 'https://build.example.test';
         $pages = [];
         foreach (['', 'lko', 'lkr', 'printing', 'pricing'] as $slug) {
             $file = ($slug ?: 'index').'.html';
             $pages[$slug] = $file;
-            File::put($this->temporaryPublic.'/app-assets/site/'.$file,
+            File::put($this->temporaryPublic.'/app/site/'.$file,
                 '<html><head><title>Vue '.$slug.'</title><meta name="description" content="Vue page"><link rel="canonical" href="'.$origin.'/'.$slug.'"><script type="application/ld+json">{"@type":"WebSite"}</script></head><body><h1>Vue '.$slug.'</h1><a href="/app/login">Войти в кабинет</a><a href="/app/register">Создать аккаунт</a></body></html>');
         }
-        File::put($this->temporaryPublic.'/app-assets/site/404.html', '<html><body><h1>Страница не найдена</h1></body></html>');
-        File::put($this->temporaryPublic.'/app-assets/site/manifest.json', json_encode(['version' => 1, 'origin' => $origin, 'pages' => $pages, 'notFound' => '404.html', 'styles' => ['assets/site.css']]));
-        File::put($this->temporaryPublic.'/app-assets/site/sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'.implode('', array_map(fn ($slug) => '<url><loc>'.$origin.'/'.$slug.'</loc></url>', array_keys($pages))).'</urlset>');
-        File::put($this->temporaryPublic.'/app-assets/assets/site.css', '/* Vue CSS */');
-        File::put($this->temporaryPublic.'/app-assets/site-images/example.png', 'fixture');
+        File::put($this->temporaryPublic.'/app/site/404.html', '<html><body><h1>Страница не найдена</h1></body></html>');
+        File::put($this->temporaryPublic.'/app/site/manifest.json', json_encode(['version' => 1, 'origin' => $origin, 'pages' => $pages, 'notFound' => '404.html', 'styles' => ['assets/site.css']]));
+        File::put($this->temporaryPublic.'/app/site/sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'.implode('', array_map(fn ($slug) => '<url><loc>'.$origin.'/'.$slug.'</loc></url>', array_keys($pages))).'</urlset>');
+        File::put($this->temporaryPublic.'/app/assets/site.css', '/* Vue CSS */');
+        File::put($this->temporaryPublic.'/app/site-images/example.png', 'fixture');
         $this->app->usePublicPath($this->temporaryPublic);
     }
 
@@ -99,7 +99,7 @@ class PublicSiteTest extends TestCase
 
     public function test_cabinet_deep_links_are_preserved_and_excluded_from_search(): void
     {
-        foreach (['', '/login', '/register', '/privacy', '/reset-password', '/new', '/history', '/employees', '/employee/42', '/calibration', '/organization', '/billing', '/support', '/help', '/receipts', '/admin-credits', '/admin-packages'] as $path) {
+        foreach (['', '/', '/login', '/register', '/privacy', '/reset-password', '/new', '/history', '/employees', '/employee/42', '/calibration', '/organization', '/billing', '/support', '/help', '/receipts', '/admin-credits', '/admin-packages'] as $path) {
             $this->get('/app'.$path)->assertOk()->assertHeader('X-Robots-Tag', 'noindex, noarchive');
         }
         foreach (['login', 'register', 'dashboard', 'new', 'history', 'employees', 'employee/42', 'calibration', 'organization', 'billing', 'support', 'help', 'receipts', 'admin-credits', 'admin-packages', 'app/dashboard', 'app/index.html'] as $path) {
@@ -122,12 +122,47 @@ class PublicSiteTest extends TestCase
 
     public function test_legacy_assets_redirect_to_the_existing_file_and_worker_keeps_root_scope(): void
     {
-        $this->get('/app/assets/old.js?v=1')->assertStatus(301)->assertRedirect('/app-assets/assets/old.js?v=1');
+        $this->get('/app/assets/old.js?v=1')->assertOk()->assertHeader('Content-Type', 'application/javascript');
+        $this->get('/app-assets/assets/old.js?v=1')->assertStatus(301)->assertRedirect('/app/assets/old.js?v=1');
         $this->get('/app/assets/missing.js')->assertNotFound();
         $this->get('/app/assets/../index.html')->assertNotFound();
         $this->get('/push-sw.js')->assertOk()->assertHeader('Service-Worker-Allowed', '/');
-        $this->get('/site-images/example.png')->assertRedirect('/app-assets/site-images/example.png');
-        $this->get('/site.css?v=old')->assertRedirect('/app-assets/assets/site.css?v=old');
+        $this->get('/site-images/example.png')->assertRedirect('/app/site-images/example.png');
+        $this->get('/site.css?v=old')->assertRedirect('/app/assets/site.css?v=old');
+    }
+
+    public function test_build_uploaded_into_the_original_app_directory_serves_the_entire_site(): void
+    {
+        // Incident regression: dist was uploaded into public/app, while its
+        // generated HTML still referenced /app-assets. Both must keep working.
+        $file = $this->temporaryPublic.'/app/site/index.html';
+        File::append($file, '<script src="/app-assets/assets/old.js"></script>');
+        foreach (['/', '/pricing', '/sitemap.xml', '/app', '/app/', '/app/login', '/app/help'] as $url) {
+            $this->get($url)->assertOk();
+        }
+        $this->get('/')->assertSee('/app-assets/assets/old.js', false);
+        $this->get('/app-assets/assets/old.js')->assertRedirect('/app/assets/old.js');
+        $this->get('/app/assets/old.js')->assertOk()->assertHeader('Content-Type', 'application/javascript');
+        $this->get('/push-sw.js')->assertOk()->assertHeader('Service-Worker-Allowed', '/');
+    }
+
+    public function test_already_installed_app_assets_build_remains_supported(): void
+    {
+        File::moveDirectory($this->temporaryPublic.'/app', $this->temporaryPublic.'/app-assets');
+        foreach (['/', '/pricing', '/sitemap.xml', '/app', '/app/', '/app/login'] as $url) {
+            $this->get($url)->assertOk();
+        }
+        $this->get('/app/assets/old.js')->assertRedirect('/app-assets/assets/old.js');
+        $this->get('/app-assets/assets/old.js')->assertOk()->assertHeader('Content-Type', 'application/javascript');
+        $this->get('/app/site-images/example.png')->assertRedirect('/app-assets/site-images/example.png');
+        $this->get('/push-sw.js')->assertOk()->assertHeader('Service-Worker-Allowed', '/');
+    }
+
+    public function test_a_new_upload_in_app_takes_precedence_over_an_older_app_assets_build(): void
+    {
+        File::copyDirectory($this->temporaryPublic.'/app', $this->temporaryPublic.'/app-assets');
+        File::put($this->temporaryPublic.'/app-assets/site/index.html', 'outdated-build');
+        $this->get('/')->assertOk()->assertSee('<h1>Vue </h1>', false)->assertDontSee('outdated-build');
     }
 
     public function test_unknown_pages_and_assets_return_real_404_and_api_keeps_json(): void

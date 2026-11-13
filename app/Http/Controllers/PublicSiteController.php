@@ -44,10 +44,7 @@ class PublicSiteController extends Controller
 
     public function cabinet(Request $request): Response
     {
-        if ($request->getPathInfo() === '/app/') {
-            return $this->cabinetRedirect($request, '/app');
-        }
-        $file = public_path('app-assets/cabinet.html');
+        $file = $this->buildPath('cabinet.html');
         abort_unless(is_file($file), 503, 'Соберите Vue-приложение: npm run build в frontend.');
 
         return response()->file($file, [
@@ -67,29 +64,50 @@ class PublicSiteController extends Controller
         return $this->cabinetRedirect($request, $target);
     }
 
-    public function legacyAsset(Request $request, string $asset): Response
+    public function legacyAsset(Request $request, string $build, string $asset): Response
     {
-        // Cached old frontend builds may still request /app/assets or /app/help.
-        abort_if(str_contains($asset, '..'), 404);
-        abort_unless(is_file(public_path('app-assets/'.$asset)), 404);
+        $file = $this->assetFile($asset);
+        $target = '/'.$this->buildDirectory().'/'.$asset;
+        if ($request->getPathInfo() !== $target) {
+            return $this->cabinetRedirect($request, $target);
+        }
 
-        return $this->cabinetRedirect($request, '/app-assets/'.$asset);
+        // Most requests are served directly by the web server. This also works
+        // with Laravel's development server and preserves the old asset URLs.
+        $type = match (pathinfo($file, PATHINFO_EXTENSION)) {
+            'js' => 'application/javascript',
+            'css' => 'text/css',
+            'svg' => 'image/svg+xml',
+            'webmanifest' => 'application/manifest+json',
+            default => null,
+        };
+
+        return response()->file($file, $type ? ['Content-Type' => $type] : []);
+    }
+
+    public function pushWorker(): Response
+    {
+        return response()->file($this->assetFile('push-sw.js'), [
+            'Content-Type' => 'application/javascript',
+            'Cache-Control' => 'no-cache',
+            'Service-Worker-Allowed' => '/',
+        ]);
     }
 
     public function legacySiteImage(Request $request, string $asset): Response
     {
-        abort_if(str_contains($asset, '..'), 404);
-        abort_unless(is_file(public_path('app-assets/site-images/'.$asset)), 404);
+        $this->assetFile('site-images/'.$asset);
 
-        return $this->cabinetRedirect($request, '/app-assets/site-images/'.$asset);
+        return $this->cabinetRedirect($request, '/'.$this->buildDirectory().'/site-images/'.$asset);
     }
 
     public function legacySiteStyle(Request $request): Response
     {
         $file = $this->manifest()['styles'][0] ?? '';
-        abort_unless(preg_match('~^assets/[a-zA-Z0-9_.-]+\\.css$~', $file) && is_file(public_path('app-assets/'.$file)), 404);
+        abort_unless(preg_match('~^assets/[a-zA-Z0-9_.-]+\\.css$~', $file), 404);
+        $this->assetFile($file);
 
-        return $this->cabinetRedirect($request, '/app-assets/'.$file);
+        return $this->cabinetRedirect($request, '/'.$this->buildDirectory().'/'.$file);
     }
 
     private function cabinetRedirect(Request $request, string $path): Response
@@ -119,7 +137,7 @@ class PublicSiteController extends Controller
 
     private function manifest(): array
     {
-        $path = public_path('app-assets/site/manifest.json');
+        $path = $this->buildPath('site/manifest.json');
         abort_unless(is_file($path), 503, 'Соберите frontend: npm run build.');
         $manifest = json_decode(file_get_contents($path), true);
         abort_unless(is_array($manifest) && isset($manifest['origin'], $manifest['pages'], $manifest['notFound']), 503, 'Повреждена сборка frontend.');
@@ -130,11 +148,33 @@ class PublicSiteController extends Controller
     private function generatedResponse(string $file, int $status = 200): Response
     {
         abort_unless(preg_match('/^[a-z0-9-]+\.(?:html|xml)$/', $file), 503);
-        $path = public_path('app-assets/site/'.$file);
+        $path = $this->buildPath('site/'.$file);
         abort_unless(is_file($path), 503, 'Соберите frontend: npm run build.');
         $manifest = $this->manifest();
         $html = str_replace($manifest['origin'], rtrim(config('site.url'), '/'), file_get_contents($path));
 
         return response($html, $status)->header('Cache-Control', 'private, no-cache');
+    }
+
+    private function buildDirectory(): string
+    {
+        // Keep the established upload location; also accept the short-lived
+        // app-assets layout so an already installed build remains usable.
+        return is_file(public_path('app/site/manifest.json')) ? 'app' : 'app-assets';
+    }
+
+    private function buildPath(string $file): string
+    {
+        return public_path($this->buildDirectory().'/'.$file);
+    }
+
+    private function assetFile(string $asset): string
+    {
+        abort_if(str_contains($asset, '..'), 404);
+        $root = realpath(public_path($this->buildDirectory()));
+        $file = realpath($this->buildPath($asset));
+        abort_unless($root && $file && str_starts_with($file, $root.DIRECTORY_SEPARATOR) && is_file($file), 404);
+
+        return $file;
     }
 }
