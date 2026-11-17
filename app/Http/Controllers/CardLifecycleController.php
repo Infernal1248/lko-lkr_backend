@@ -4,9 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Generation;
 use App\Models\LedgerEntry;
-use App\Models\PrinterProfile;
 use App\Models\User;
-use App\Services\CardInput;
 use App\Services\PdfRenderer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +20,6 @@ class CardLifecycleController extends Controller
         $data = $request->validate([
             'data_rights' => 'accepted', 'action' => ['required', Rule::in(['type', 'replace'])],
             'template_key' => ['required_if:action,type', Rule::in(array_keys(config('cards.templates')))],
-            'profile_id' => 'required_if:action,type|nullable|integer',
             'issue_date' => 'required_if:action,replace|nullable|date_format:Y-m-d',
             'request_key' => 'required_if:action,replace|nullable|uuid',
         ]);
@@ -46,7 +43,7 @@ class CardLifecycleController extends Controller
                 abort_if($user->credits < 1, 402, 'Недостаточно генераций. Для перевыпуска нужна 1 генерация.');
                 $snapshot = $source->snapshot;
                 $snapshot['data']['issue_date'] = $data['issue_date'];
-                $pdf = $this->renderer->render($source->template_key, $snapshot['data'], $snapshot['settings']);
+                $pdf = $this->renderer->render($snapshot['template_key'] ?? $source->template_key, $snapshot['data'], $snapshot['settings']);
                 $replacement = Generation::create([
                     'id' => (string) Str::uuid(), 'user_id' => $user->id,
                     'employee_id' => $source->employee_id, 'source_generation_id' => $source->id,
@@ -64,22 +61,13 @@ class CardLifecycleController extends Controller
 
                 return $replacement;
             }
-            $snapshot = $source->snapshot;
             $corrections = $source->corrections ?? [];
             if ($source->template_key === $data['template_key']) {
                 return $source;
             }
-            $profile = PrinterProfile::where('user_id', $user->id)->where('template_key', $data['template_key'])->whereNotNull('calibrated_at')->find($data['profile_id']);
-            abort_unless($profile, 422, 'Выберите свой настроенный принтер для нового типа карточки.');
+            abort_if($source->card_number_hash && Generation::where('user_id', $user->id)->where('template_key', $data['template_key'])->where('card_number_hash', $source->card_number_hash)->whereKeyNot($source->id)->exists(), 422, 'В реестре уже есть карточка выбранного типа с таким номером.');
             $corrections[] = ['action' => 'type', 'from' => $source->template_key, 'to' => $data['template_key'], 'previous_number' => $source->card_number, 'at' => now()->toISOString()];
-            $snapshot['template_key'] = $data['template_key'];
-            $snapshot['settings'] = CardInput::settings($profile->settings);
             $source->template_key = $data['template_key'];
-            $source->template_version = config('cards.templates.'.$data['template_key'].'.version');
-            // The previous number belongs to the old series and stays in correction history.
-            $source->card_number = $source->card_number_hash = $source->assigned_at = null;
-            $source->pdf = base64_encode($this->renderer->render($source->template_key, $snapshot['data'], $snapshot['settings']));
-            $source->snapshot = $snapshot;
             $source->corrections = $corrections;
             $source->rights_confirmed_at = now();
             $source->save();

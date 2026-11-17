@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Card;
 use App\Models\Consent;
 use App\Models\Generation;
-use App\Models\PrinterProfile;
 use App\Models\User;
 use App\Services\CardInput;
 use App\Services\PdfRenderer;
@@ -37,19 +36,23 @@ class CardLifecycleTest extends TestCase
         return [$user, $source, $employee, $settings];
     }
 
-    public function test_free_type_correction_changes_layout_preserves_data_and_records_history(): void
+    public function test_free_type_correction_only_changes_registry_type_and_preserves_pdf_number_and_dates(): void
     {
-        [$user, $source, $employee, $settings] = $this->source();
-        $settings['offset_y'] = 2;
-        $profile = PrinterProfile::create(['user_id' => $user->id, 'name' => 'Принтер ЛКО', 'template_key' => 'ppd-lko', 'settings' => $settings, 'calibrated_at' => now()]);
+        [$user, $source] = $this->source();
+        $this->mock(PdfRenderer::class)->shouldNotReceive('render');
         $before = $source->snapshot;
-        $this->postJson('/api/generations/'.$source->id.'/lifecycle', ['action' => 'type', 'template_key' => 'ppd-lko', 'profile_id' => $profile->id, 'data_rights' => true, 'data' => ['surname' => 'Чужая фамилия']])->assertOk()->assertJsonPath('template_key', 'ppd-lko')->assertJsonPath('card_number', null);
+        $created = $source->created_at->toISOString();
+        $hash = $source->card_number_hash;
+        $payload = ['action' => 'type', 'template_key' => 'ppd-lko', 'data_rights' => true];
+        $this->postJson('/api/generations/'.$source->id.'/lifecycle', $payload)->assertOk()->assertJsonPath('template_key', 'ppd-lko')->assertJsonPath('card_number', '000123');
+        $this->postJson('/api/generations/'.$source->id.'/lifecycle', $payload)->assertOk();
         $source->refresh();
-        $this->assertSame($before['data'], $source->snapshot['data']);
-        $this->assertSame($settings, $source->snapshot['settings']);
+        $this->assertSame($before, $source->snapshot);
+        $this->assertSame($created, $source->created_at->toISOString());
+        $this->assertSame($hash, $source->card_number_hash);
+        $this->assertSame('Original PDF', base64_decode($source->pdf));
         $this->assertSame('000123', $source->corrections[0]['previous_number']);
-        $this->assertSame($before['data'], json_decode(base64_decode($source->pdf), true)[1]);
-        $this->assertSame('ppd-lko', json_decode(base64_decode($source->pdf), true)[0]);
+        $this->assertCount(1, $source->corrections);
         $this->assertSame(0, $user->fresh()->credits);
         $this->assertDatabaseCount('ledger_entries', 0);
         $this->assertDatabaseCount('generations', 1);
@@ -119,15 +122,17 @@ class CardLifecycleTest extends TestCase
         $this->assertDatabaseCount('ledger_entries', 0);
     }
 
-    public function test_type_correction_requires_correct_calibrated_owned_profile(): void
+    public function test_type_correction_rejects_duplicate_number_in_target_series(): void
     {
-        [$user, $source, $employee, $settings] = $this->source();
-        $other = User::factory()->create();
-        foreach ([[$other->id, 'ppd-lko', now()], [$user->id, 'ppd-lkr', now()], [$user->id, 'ppd-lko', null]] as [$ownerId, $type, $calibrated]) {
-            $profile = PrinterProfile::create(['user_id' => $ownerId, 'name' => 'Недоступный профиль', 'template_key' => $type, 'settings' => $settings, 'calibrated_at' => $calibrated]);
-            $this->postJson('/api/generations/'.$source->id.'/lifecycle', ['action' => 'type', 'template_key' => 'ppd-lko', 'profile_id' => $profile->id, 'data_rights' => true])->assertUnprocessable();
-        }
+        [$user, $source] = $this->source();
+        $duplicate = $source->replicate(['id', 'request_key']);
+        $duplicate->id = (string) Str::uuid();
+        $duplicate->request_key = (string) Str::uuid();
+        $duplicate->template_key = 'ppd-lko';
+        $duplicate->save();
+        $this->postJson('/api/generations/'.$source->id.'/lifecycle', ['action' => 'type', 'template_key' => 'ppd-lko', 'data_rights' => true])->assertUnprocessable();
         $this->assertSame('ppd-lkr', $source->fresh()->template_key);
+        $this->assertSame('000123', $source->fresh()->card_number);
         $this->assertSame('Original PDF', base64_decode($source->fresh()->pdf));
         $this->assertDatabaseCount('ledger_entries', 0);
     }
