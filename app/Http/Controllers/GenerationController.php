@@ -13,7 +13,6 @@ use App\Services\PdfRenderer;
 use App\Services\RegistryData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -86,26 +85,20 @@ class GenerationController extends Controller
 
     public function index(Request $request): mixed
     {
-        $request->validate(['q' => 'nullable|string|max:160', 'page' => 'nullable|integer|min:1', 'employee_id' => 'nullable|integer|min:1']);
-        $query = Generation::where('user_id', $request->user()->id)->select(['id', 'template_key', 'template_version', 'snapshot', 'created_at', 'deleted_at', 'card_number', 'assigned_at', 'employee_id', 'registry', 'inactive_at', 'source_generation_id', 'corrections'])->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))->latest();
+        $request->validate(['q' => 'nullable|string|max:160', 'employee_id' => 'nullable|integer|min:1', 'created_from' => 'nullable|date', 'created_before' => 'nullable|date|after:created_from']);
+        $query = Generation::where('user_id', $request->user()->id)->select(['id', 'template_key', 'template_version', 'snapshot', 'created_at', 'deleted_at', 'card_number', 'assigned_at', 'employee_id', 'registry', 'inactive_at', 'source_generation_id', 'corrections'])->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))->createdPeriod($request->input('created_from'), $request->input('created_before'))->latest();
         $search = mb_strtolower(trim($request->input('q', '')));
-        if ($search === '') {
-            return $query->paginate(30);
-        }
-        $matches = collect();
-        $total = 0;
-        $page = (int) $request->input('page', 1);
-        foreach ($query->cursor() as $g) {
-            $data = $g->snapshot['data'] ?? [];
-            $name = mb_strtolower(implode(' ', [$data['surname'] ?? '', $data['name'] ?? '', $data['patronymic'] ?? '']));
-            if (str_contains($name, $search) || str_contains(mb_strtolower($g->card_number ?? ''), $search)) {
-                if ($total >= ($page - 1) * 30 && $total < $page * 30) {
-                    $matches->push($g);
-                } $total++;
-            }
+        $rows = $query->get();
+        if ($search !== '') {
+            $rows = $rows->filter(function ($g) use ($search) {
+                $data = $g->snapshot['data'] ?? [];
+                $name = mb_strtolower(implode(' ', [$data['surname'] ?? '', $data['name'] ?? '', $data['patronymic'] ?? '']));
+
+                return str_contains($name, $search) || str_contains(mb_strtolower($g->card_number ?? ''), $search);
+            })->values();
         }
 
-        return new LengthAwarePaginator($matches, $total, 30, $page, ['path' => $request->url(), 'query' => $request->query()]);
+        return ['data' => $rows, 'total' => $rows->count()];
     }
 
     public function download(Request $request, string $id): mixed

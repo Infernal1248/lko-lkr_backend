@@ -43,13 +43,14 @@ class CardLifecycleTest extends TestCase
         $before = $source->snapshot;
         $created = $source->created_at->toISOString();
         $hash = $source->card_number_hash;
-        $payload = ['action' => 'type', 'template_key' => 'ppd-lko', 'data_rights' => true];
+        $payload = ['action' => 'type', 'template_key' => 'ppd-lko'];
         $this->postJson('/api/generations/'.$source->id.'/lifecycle', $payload)->assertOk()->assertJsonPath('template_key', 'ppd-lko')->assertJsonPath('card_number', '000123');
         $this->postJson('/api/generations/'.$source->id.'/lifecycle', $payload)->assertOk();
         $source->refresh();
         $this->assertSame($before, $source->snapshot);
         $this->assertSame($created, $source->created_at->toISOString());
         $this->assertSame($hash, $source->card_number_hash);
+        $this->assertNull($source->rights_confirmed_at);
         $this->assertSame('Original PDF', base64_decode($source->pdf));
         $this->assertSame('000123', $source->corrections[0]['previous_number']);
         $this->assertCount(1, $source->corrections);

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Services\RegistryData;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class Generation extends Model
@@ -23,6 +25,13 @@ class Generation extends Model
     protected $keyType = 'string';
 
     protected $hidden = ['pdf', 'fingerprint', 'request_key', 'card_number_hash'];
+
+    public function scopeCreatedPeriod(Builder $query, ?string $from, ?string $before): Builder
+    {
+        return $query
+            ->when($from, fn ($query) => $query->where('created_at', '>=', Carbon::parse($from)->utc()->toDateTimeString()))
+            ->when($before, fn ($query) => $query->where('created_at', '<', Carbon::parse($before)->utc()->toDateTimeString()));
+    }
 
     protected function casts(): array
     {

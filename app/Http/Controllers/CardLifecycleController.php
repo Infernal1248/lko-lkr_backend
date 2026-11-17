@@ -18,7 +18,7 @@ class CardLifecycleController extends Controller
     public function update(Request $request, string $id): mixed
     {
         $data = $request->validate([
-            'data_rights' => 'accepted', 'action' => ['required', Rule::in(['type', 'replace'])],
+            'data_rights' => 'exclude_unless:action,replace|accepted', 'action' => ['required', Rule::in(['type', 'replace'])],
             'template_key' => ['required_if:action,type', Rule::in(array_keys(config('cards.templates')))],
             'issue_date' => 'required_if:action,replace|nullable|date_format:Y-m-d',
             'request_key' => 'required_if:action,replace|nullable|uuid',
@@ -69,7 +69,6 @@ class CardLifecycleController extends Controller
             $corrections[] = ['action' => 'type', 'from' => $source->template_key, 'to' => $data['template_key'], 'previous_number' => $source->card_number, 'at' => now()->toISOString()];
             $source->template_key = $data['template_key'];
             $source->corrections = $corrections;
-            $source->rights_confirmed_at = now();
             $source->save();
 
             return $source;
