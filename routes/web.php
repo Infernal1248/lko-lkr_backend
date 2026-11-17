@@ -7,6 +7,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BonusEmailController;
 use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\CardController;
+use App\Http\Controllers\CardLifecycleController;
 use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\NpdBotController;
 use App\Http\Controllers\PaymentController;
@@ -90,8 +91,9 @@ Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
             Route::put('/cards/{id}', [CardController::class, 'update']);
             Route::delete('/cards/{id}', [CardController::class, 'destroy']);
             Route::post('/preview', [GenerationController::class, 'preview'])->middleware('throttle:180,1');
+            Route::post('/generations/{id}/lifecycle', [CardLifecycleController::class, 'update'])->middleware('throttle:20,1');
             Route::post('/generations', [GenerationController::class, 'store'])->middleware('throttle:20,1');
-            Route::get('/registry/export/{format}', [RegistryController::class, 'export'])->middleware('throttle:5,1');
+            Route::match(['get', 'post'], '/registry/export/{format}', [RegistryController::class, 'export'])->middleware('throttle:5,1');
             Route::put('/generations/{id}/registry', [RegistryController::class, 'update']);
             Route::get('/generations', [GenerationController::class, 'index']);
             Route::get('/generations/{id}/download', [GenerationController::class, 'download']);

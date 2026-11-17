@@ -26,6 +26,6 @@ class Generation extends Model
 
     protected function casts(): array
     {
-        return ['registry' => 'encrypted:array', 'rights_confirmed_at' => 'datetime', 'card_number' => 'encrypted', 'assigned_at' => 'datetime', 'snapshot' => 'encrypted:array', 'pdf' => 'encrypted', 'deleted_at' => 'datetime'];
+        return ['inactive_at' => 'datetime', 'corrections' => 'encrypted:array', 'registry' => 'encrypted:array', 'rights_confirmed_at' => 'datetime', 'card_number' => 'encrypted', 'assigned_at' => 'datetime', 'snapshot' => 'encrypted:array', 'pdf' => 'encrypted', 'deleted_at' => 'datetime'];
     }
 }

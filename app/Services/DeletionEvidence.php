@@ -27,7 +27,7 @@ class DeletionEvidence
                 return;
             }
             self::record($userId, 'generation', $id, $generation->snapshot['data'] ?? [], $generation->registry ?? [], filled($generation->pdf), filled($generation->card_number));
-            $generation->update(['pdf' => null, 'snapshot' => null, 'registry' => null, 'employee_id' => null, 'card_number' => null, 'card_number_hash' => null, 'assigned_at' => null, 'deleted_at' => now()]);
+            $generation->update(['corrections' => null, 'pdf' => null, 'snapshot' => null, 'registry' => null, 'employee_id' => null, 'card_number' => null, 'card_number_hash' => null, 'assigned_at' => null, 'deleted_at' => now()]);
         });
     }
 

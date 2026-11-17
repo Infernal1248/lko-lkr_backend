@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Card;
 use App\Models\Generation;
 use App\Services\RegistryData;
 use App\Services\RegistryExport;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class RegistryController extends Controller
 {
@@ -21,9 +23,18 @@ class RegistryController extends Controller
     public function export(Request $r, string $format, RegistryExport $export): mixed
     {
         abort_unless(in_array($format, ['pdf', 'xlsx']), 404);
-        $r->validate(['q' => 'nullable|string|max:160']);
+        $data = $r->validate([
+            'q' => 'nullable|string|max:160',
+            'employee_id' => 'nullable|integer|min:1|prohibited_with:employee_ids',
+            'employee_ids' => ($r->isMethod('post') ? 'required' : 'sometimes').'|array|min:1|max:2000',
+            'employee_ids.*' => 'required|integer|min:1|distinct',
+        ]);
+        $ids = $data['employee_ids'] ?? null;
+        if ($ids !== null && Card::where('user_id', $r->user()->id)->whereIn('id', $ids)->count() !== count($ids)) {
+            throw ValidationException::withMessages(['employee_ids' => 'Выберите сотрудников текущего аккаунта. Обновите список, если сотрудник был удалён.']);
+        }
         $q = mb_strtolower(trim($r->input('q', '')));
-        $rows = Generation::where('user_id', $r->user()->id)->whereNull('deleted_at')->select(['id', 'template_key', 'snapshot', 'registry', 'card_number', 'created_at'])->orderBy('created_at')->cursor()->filter(function ($g) use ($q) {
+        $rows = Generation::where('user_id', $r->user()->id)->whereNull('deleted_at')->when($ids !== null, fn ($query) => $query->whereIn('employee_id', $ids))->when($r->filled('employee_id'), fn ($q) => $q->where('employee_id', $r->integer('employee_id')))->select(['id', 'template_key', 'snapshot', 'registry', 'card_number', 'created_at'])->orderBy('created_at')->cursor()->filter(function ($g) use ($q) {
             $d = $g->snapshot['data'] ?? [];
 
             return $q === '' || str_contains(mb_strtolower(implode(' ', [$d['surname'] ?? '', $d['name'] ?? '', $d['patronymic'] ?? '', $g->card_number ?? ''])), $q);

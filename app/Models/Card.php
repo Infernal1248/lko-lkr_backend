@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\RegistryData;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Card extends Model
 {
@@ -17,6 +18,11 @@ class Card extends Model
     }
 
     protected $table = 'cards';
+
+    public function generations(): HasMany
+    {
+        return $this->hasMany(Generation::class, 'employee_id');
+    }
 
     protected function casts(): array
     {

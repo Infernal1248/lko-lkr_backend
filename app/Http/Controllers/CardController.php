@@ -14,7 +14,9 @@ class CardController extends Controller
 {
     public function index(Request $request): mixed
     {
-        return Card::where('user_id', $request->user()->id)->latest()->get();
+        return Card::where('user_id', $request->user()->id)->with(['generations' => fn ($q) => $q->where('user_id', $request->user()->id)->whereNull('deleted_at')->select(['id', 'employee_id', 'template_key', 'card_number', 'created_at', 'inactive_at', 'source_generation_id', 'snapshot'])->latest()])->latest()->get()->each(function ($card) {
+            $card->setRelation('generations', $card->generations->map(fn ($g) => $g->only('id', 'template_key', 'card_number', 'created_at', 'inactive_at', 'source_generation_id') + ['issue_date' => $g->snapshot['data']['issue_date'] ?? null]));
+        });
     }
 
     public function store(Request $request): mixed

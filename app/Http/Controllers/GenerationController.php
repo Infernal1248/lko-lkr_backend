@@ -86,8 +86,8 @@ class GenerationController extends Controller
 
     public function index(Request $request): mixed
     {
-        $request->validate(['q' => 'nullable|string|max:160', 'page' => 'nullable|integer|min:1']);
-        $query = Generation::where('user_id', $request->user()->id)->select(['id', 'template_key', 'template_version', 'snapshot', 'created_at', 'deleted_at', 'card_number', 'assigned_at', 'employee_id', 'registry'])->latest();
+        $request->validate(['q' => 'nullable|string|max:160', 'page' => 'nullable|integer|min:1', 'employee_id' => 'nullable|integer|min:1']);
+        $query = Generation::where('user_id', $request->user()->id)->select(['id', 'template_key', 'template_version', 'snapshot', 'created_at', 'deleted_at', 'card_number', 'assigned_at', 'employee_id', 'registry', 'inactive_at', 'source_generation_id', 'corrections'])->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))->latest();
         $search = mb_strtolower(trim($request->input('q', '')));
         if ($search === '') {
             return $query->paginate(30);
@@ -124,6 +124,7 @@ class GenerationController extends Controller
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $generation = Generation::where('user_id', $request->user()->id)->findOrFail($id);
             abort_if($generation->deleted_at || ! $generation->snapshot, 410, 'Документ удалён.');
+            abort_if($generation->inactive_at, 409, 'Нельзя менять номер неактуальной карточки.');
             $number = $data['card_number'];
             $hash = $number === null ? null : hash_hmac('sha256', $number, config('app.key'));
             if ($hash && Generation::where('user_id', $request->user()->id)->where('template_key', $generation->template_key)->where('card_number_hash', $hash)->where('id', '!=', $id)->exists()) {
