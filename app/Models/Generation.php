@@ -15,7 +15,7 @@ class Generation extends Model
 
     public function getRegistryCompleteAttribute(): bool
     {
-        return $this->card_number !== null && ! empty($this->snapshot['data']['issue_date']) && RegistryData::complete($this->registry);
+        return RegistryData::complete($this->registry);
     }
 
     protected $table = 'generations';

@@ -98,7 +98,7 @@ class RegistryAndSupportTest extends TestCase
         $g = $this->postJson('/api/generations', $this->payload($u))->assertCreated()->json();
         $pdf = Generation::find($g['id'])->pdf;
         $this->putJson('/api/generations/'.$g['id'].'/registry', ['registry' => ['birth_place' => 'Красноярск'], 'data_rights' => true])->assertOk()->assertJsonPath('registry_complete', false);
-        $this->putJson('/api/generations/'.$g['id'].'/registry', ['registry' => $this->registry(), 'data_rights' => true])->assertOk()->assertJsonPath('registry_complete', false);
+        $this->putJson('/api/generations/'.$g['id'].'/registry', ['registry' => $this->registry(), 'data_rights' => true])->assertOk()->assertJsonPath('registry_complete', true);
         $this->putJson('/api/generations/'.$g['id'].'/number', ['card_number' => '000001'])->assertOk()->assertJsonPath('registry_complete', true);
         $this->assertSame($pdf, Generation::find($g['id'])->pdf);
         $this->assertSame(4, $u->fresh()->credits);
@@ -106,6 +106,19 @@ class RegistryAndSupportTest extends TestCase
         $this->putJson('/api/generations/'.$g['id'].'/registry', ['registry' => [], 'data_rights' => false])->assertUnprocessable();
         $this->account();
         $this->putJson('/api/generations/'.$g['id'].'/registry', ['registry' => [], 'data_rights' => true])->assertNotFound();
+    }
+
+    public function test_registry_completeness_ignores_card_number_and_allows_optional_guard_and_dismissal_fields(): void
+    {
+        $u = $this->account();
+        $registry = $this->registry();
+        $registry['is_guard'] = false;
+        unset($registry['guard_series'], $registry['guard_number']);
+        $payload = $this->payload($u) + ['registry' => $registry];
+        $g = $this->postJson('/api/generations', $payload)->assertCreated()->assertJsonPath('registry_complete', true)->assertJsonPath('card_number', null)->json();
+        foreach ([['hire_order' => null], ['is_guard' => true], ['dismissed_at' => '2026-11-01']] as $missing) {
+            $this->putJson('/api/generations/'.$g['id'].'/registry', ['registry' => [...$registry, ...$missing], 'data_rights' => true])->assertOk()->assertJsonPath('registry_complete', false);
+        }
     }
 
     public function test_export_matches_supplied_columns_and_leaves_optional_cells_blank(): void
