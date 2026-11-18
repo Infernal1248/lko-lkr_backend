@@ -12,7 +12,14 @@ class ReceiptController extends Controller
     {
         abort_unless($request->user()->is_support_admin, 403);
 
-        return Payment::where('status', 'succeeded')->where('test_mode', false)->where('receipt_mode', 'npd_manual')->orderByRaw('receipt_recorded_at IS NOT NULL')->orderBy('paid_at')->paginate(30);
+        $payments = Payment::where('status', 'succeeded')
+            ->where('test_mode', false)
+            ->where('receipt_mode', 'npd_manual')
+            ->orderByRaw('receipt_recorded_at IS NOT NULL')
+            ->orderBy('paid_at')
+            ->get();
+
+        return ['data' => $payments, 'total' => $payments->count()];
     }
 
     public function update(Request $request, string $id): mixed

@@ -245,6 +245,39 @@ class RegistryAndSupportTest extends TestCase
         $this->actingAs($u)->getJson('/api/payments')->assertJsonPath('data.0.receipt_url', $url);
     }
 
+    public function test_npd_receipt_list_returns_all_eligible_payments_without_pagination(): void
+    {
+        $user = User::factory()->create();
+        $makePayment = fn (array $attributes = []) => Payment::create($attributes + [
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'request_key' => (string) Str::uuid(),
+            'package' => 'start',
+            'credits' => 25,
+            'amount' => 49000,
+            'status' => 'succeeded',
+            'test_mode' => false,
+            'receipt_mode' => 'npd_manual',
+            'paid_at' => now(),
+        ]);
+        $ids = [];
+        for ($i = 0; $i < 31; $i++) {
+            $ids[] = $makePayment()->id;
+        }
+        $url = 'https://lknpd.nalog.ru/api/v1/receipt/242022368804/test/print';
+        $attached = $makePayment(['receipt_url' => $url, 'receipt_recorded_at' => now()]);
+        $makePayment(['test_mode' => true]);
+        $makePayment(['status' => 'pending']);
+        $makePayment(['receipt_mode' => 'none']);
+
+        $response = $this->actingAs(User::factory()->create(['is_support_admin' => true]))
+            ->getJson('/api/receipts')->assertOk()->assertJsonPath('total', 32)
+            ->assertJsonCount(32, 'data')->assertJsonMissingPath('last_page')
+            ->assertJsonPath('data.31.receipt_url', $url);
+
+        $this->assertEqualsCanonicalizing([...$ids, $attached->id], array_column($response->json('data'), 'id'));
+    }
+
     public function test_employee_can_be_saved_without_print_data_and_card_generation_remains_strict(): void
     {
         $user = $this->account();
