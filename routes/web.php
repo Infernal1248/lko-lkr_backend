@@ -19,11 +19,12 @@ use App\Http\Controllers\SupportController;
 use App\Http\Middleware\NpdBotAuth;
 use App\Http\Middleware\PrivateResponse;
 use App\Http\Middleware\RequireConsent;
+use App\Http\Middleware\UseRussianApiLocale;
 use App\Services\RegistrationVerification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('api')->middleware(PrivateResponse::class)->group(function () {
+Route::prefix('api')->middleware([UseRussianApiLocale::class, PrivateResponse::class])->group(function () {
     Route::middleware([NpdBotAuth::class, 'throttle:60,1'])->group(function () {
         Route::get('/npd/payments', [NpdBotController::class, 'index']);
         Route::post('/npd/receipts', [NpdBotController::class, 'store']);

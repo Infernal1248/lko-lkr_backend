@@ -1,0 +1,5 @@
+{
+    "The given data was invalid.": "Проверьте введённые данные.",
+    "(and :count more error)": "(ещё одна ошибка)",
+    "(and :count more errors)": "(ещё ошибок: :count)"
+}

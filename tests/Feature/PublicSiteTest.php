@@ -171,7 +171,7 @@ class PublicSiteTest extends TestCase
             $this->get('/'.$path)->assertNotFound()->assertSee('Страница не найдена')->assertDontSee('cabinet-fixture')
                 ->assertHeader('X-Robots-Tag', 'noindex, noarchive');
         }
-        $this->getJson('/api/missing')->assertNotFound()->assertJson(['message' => 'Not Found']);
+        $this->getJson('/api/missing')->assertNotFound()->assertJson(['message' => 'Запрошенная запись или страница не найдена.']);
     }
 
     public function test_public_catalog_api_returns_live_prices_independently_of_the_html_build(): void

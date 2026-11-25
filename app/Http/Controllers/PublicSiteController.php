@@ -126,7 +126,7 @@ class PublicSiteController extends Controller
     public function notFound(Request $request): Response
     {
         if ($request->is('api', 'api/*') || $request->expectsJson()) {
-            return response()->json(['message' => 'Not Found'], 404)
+            return response()->json(['message' => trans('http.404', locale: 'ru')], 404)
                 ->header('Cache-Control', 'private, no-store')
                 ->header('X-Robots-Tag', 'noindex, noarchive');
         }
