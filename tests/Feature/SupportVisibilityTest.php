@@ -12,6 +12,33 @@ class SupportVisibilityTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_support_folders_are_filtered_before_pagination_and_follow_ticket_status(): void
+    {
+        $owner = User::factory()->create();
+        $admin = User::factory()->create(['is_support_admin' => true]);
+        $open = SupportTicket::create(['user_id' => $owner->id, 'subject' => 'Вопрос', 'updated_at' => now()->subDay()]);
+        $answered = SupportTicket::create(['user_id' => $owner->id, 'subject' => 'С ответом', 'status' => 'answered', 'updated_at' => now()->subDays(2)]);
+        for ($i = 0; $i < 26; $i++) {
+            SupportTicket::create(['user_id' => $owner->id, 'subject' => 'Закрытое обращение', 'status' => 'closed']);
+        }
+
+        $this->actingAs($admin)->getJson('/api/support?folder=active')->assertOk()
+            ->assertJsonPath('total', 2)->assertJsonPath('data.0.id', $open->id)->assertJsonPath('data.1.id', $answered->id);
+        $this->getJson('/api/support?folder=archive')->assertOk()->assertJsonPath('total', 26)
+            ->assertJsonPath('last_page', 2)->assertJsonCount(25, 'data')->assertJsonPath('data.0.status', 'closed');
+        $this->getJson('/api/support?folder=archive&page=2')->assertOk()->assertJsonCount(1, 'data');
+
+        $this->postJson('/api/support/'.$open->id.'/close')->assertOk();
+        $this->getJson('/api/support?folder=active')->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $answered->id);
+        $this->getJson('/api/support?folder=archive')->assertJsonPath('total', 27);
+
+        $this->postJson('/api/support/'.$open->id.'/messages', ['body' => 'Продолжение'])->assertCreated();
+        $this->getJson('/api/support?folder=active')->assertJsonPath('total', 2)->assertJsonPath('data.0.id', $open->id);
+        $this->getJson('/api/support?folder=archive')->assertJsonPath('total', 26);
+
+        $this->actingAs(User::factory()->create())->getJson('/api/support?folder=archive')->assertOk()->assertJsonPath('total', 0);
+    }
+
     public function test_only_admin_sees_account_identity_and_user_receives_support_answer(): void
     {
         $owner = User::factory()->create(['username' => 'client_login']);

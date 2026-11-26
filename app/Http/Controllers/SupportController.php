@@ -27,12 +27,18 @@ class SupportController extends Controller
 
     public function index(Request $r): mixed
     {
+        $data = $r->validate(['folder' => 'sometimes|in:active,archive']);
         $q = SupportTicket::query()->withUnreadReply();
         if ($r->user()->is_support_admin) {
             $q->with('user:id,name,username,email');
         }
         if (! $r->user()->is_support_admin) {
             $q->where('user_id', $r->user()->id);
+        }
+        if (($data['folder'] ?? null) === 'active') {
+            $q->whereIn('status', ['open', 'answered']);
+        } elseif (($data['folder'] ?? null) === 'archive') {
+            $q->where('status', 'closed');
         }
 
         return $q->orderByDesc('updated_at')->paginate(25);
