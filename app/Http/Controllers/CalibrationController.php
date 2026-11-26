@@ -49,7 +49,7 @@ class CalibrationController extends Controller
             $correctedX = $x + $settings['offset_x'] + $settings['fields'][$key]['x'];
             $correctedY = $y + $settings['offset_y'] + $settings['fields'][$key]['y'];
             if ($correctedX < 0 || $correctedY < 0 || $correctedX + $width > $template['width'] || $correctedY + 5 > $template['height']) {
-                throw ValidationException::withMessages(['measurements' => 'Полученная поправка выводит текст за лист. Проверьте сторону подачи, формат А5 и масштаб 100%.']);
+                throw ValidationException::withMessages(['measurements' => 'Полученная поправка выводит текст за лист. Проверьте сторону подачи, размер 210 × 150 мм и масштаб 100%.']);
             }
         }
 

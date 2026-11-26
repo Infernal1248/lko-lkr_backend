@@ -51,14 +51,14 @@ class CalibrationWorkflowTest extends TestCase
     public function test_calibration_layout_is_authenticated_and_demo_only(): void
     {
         $this->getJson('/api/calibration/layout')->assertUnauthorized();
-        $this->actingAs(User::factory()->create())->getJson('/api/calibration/layout')->assertOk()->assertJsonCount(6, 'fields')->assertJsonPath('fields.0.text', 'Образцов')->assertJsonPath('crop.2', 120);
+        $this->actingAs(User::factory()->create())->getJson('/api/calibration/layout')->assertOk()->assertJsonCount(6, 'fields')->assertJsonPath('fields.0.text', 'Образцов')->assertJsonPath('crop.2', 120)->assertJsonPath('height', 150);
     }
 
-    public function test_trial_sheet_is_a4_but_printed_data_remains_a5_and_free(): void
+    public function test_trial_sheet_is_a4_and_test_data_matches_the_150_mm_blank(): void
     {
         $this->actingAs($user = User::factory()->create(['credits' => 3]));
         foreach (['ppd-lkr', 'ppd-lko'] as $key) {
-            foreach ([true => [210, 297], false => [210, 148]] as $proof => [$width, $height]) {
+            foreach ([true => [210, 297], false => [210, 150]] as $proof => [$width, $height]) {
                 $response = $this->postJson('/api/calibration/pdf', ['template_key' => $key, 'proof' => (bool) $proof, 'settings' => $this->settings()]);
                 $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
                 preg_match('/\/MediaBox\s*\[0(?:\.0+)? 0(?:\.0+)? ([0-9.]+) ([0-9.]+)\]/', $response->getContent(), $box);

@@ -43,12 +43,13 @@ class CardLifecycleController extends Controller
                 abort_if($user->credits < 1, 402, 'Недостаточно генераций. Для перевыпуска нужна 1 генерация.');
                 $snapshot = $source->snapshot;
                 $snapshot['data']['issue_date'] = $data['issue_date'];
-                $pdf = $this->renderer->render($snapshot['template_key'] ?? $source->template_key, $snapshot['data'], $snapshot['settings']);
+                $printTemplate = $snapshot['template_key'] ?? $source->template_key;
+                $pdf = $this->renderer->render($printTemplate, $snapshot['data'], $snapshot['settings']);
                 $replacement = Generation::create([
                     'id' => (string) Str::uuid(), 'user_id' => $user->id,
                     'employee_id' => $source->employee_id, 'source_generation_id' => $source->id,
                     'request_key' => $data['request_key'], 'fingerprint' => $fingerprint,
-                    'template_key' => $source->template_key, 'template_version' => $source->template_version,
+                    'template_key' => $source->template_key, 'template_version' => config('cards.templates.'.$printTemplate.'.version'),
                     'snapshot' => $snapshot, 'registry' => $source->registry,
                     'rights_confirmed_at' => now(), 'pdf' => base64_encode($pdf),
                 ]);

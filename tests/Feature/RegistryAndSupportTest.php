@@ -218,7 +218,7 @@ class RegistryAndSupportTest extends TestCase
         $this->assertSame(config('cards.privacy_version'), $u->privacy_version);
     }
 
-    public function test_full_a5_preview_uses_the_whole_template(): void
+    public function test_full_calibration_background_uses_the_original_scan(): void
     {
         $this->actingAs(User::factory()->create());
         $r = $this->get('/api/calibration/background?template_key=ppd-lkr&full=1')->assertOk();

@@ -42,7 +42,11 @@ class CardServiceTest extends TestCase
         $first = $this->postJson('/api/generations', $data)->assertCreated();
         $this->postJson('/api/generations', $data)->assertCreated()->assertJsonPath('id', $first['id']);
         $this->assertSame(2, $u->fresh()->credits);
-        $this->get('/api/generations/'.$first['id'].'/download')->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $download = $this->get('/api/generations/'.$first['id'].'/download')->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        preg_match('/\/MediaBox\s*\[0(?:\.0+)? 0(?:\.0+)? ([0-9.]+) ([0-9.]+)\]/', $download->getContent(), $box);
+        $this->assertCount(3, $box);
+        $this->assertEqualsWithDelta(210, (float) $box[1] * 25.4 / 72, 0.01);
+        $this->assertEqualsWithDelta(150, (float) $box[2] * 25.4 / 72, 0.01);
         $this->assertSame(2, $u->fresh()->credits);
         $this->assertDatabaseCount('ledger_entries', 1);
         $this->assertStringNotContainsString('Образцов', DB::table('generations')->value('snapshot'));

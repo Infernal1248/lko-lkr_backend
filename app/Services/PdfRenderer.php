@@ -12,13 +12,14 @@ class PdfRenderer
         $template = config("cards.templates.$key");
         abort_unless($template, 422, 'Неизвестный бланк.');
         $pdf = $this->document($template);
+        $pdf->setViewerPreferences(['PrintScaling' => 'None']);
         if ($preview || $proof) {
-            $pdf->Image(resource_path($template['preview_image']), 0, 0, $template['width'], $template['height']);
+            $pdf->Image(resource_path($template['preview_image']), 0, 0, $template['width'], $template['scan_height']);
         }
         if ($proof) {
             $pdf->SetFont('liberationserif', 'B', 10, resource_path('fonts/liberationserifb.json'));
             $pdf->SetXY(4, 4);
-            $pdf->Cell(100, 5, 'ПРОБНЫЙ МАКЕТ · А5 · 100%');
+            $pdf->Cell(100, 5, sprintf('ПРОБНЫЙ МАКЕТ · %d × %d мм · 100%%', $template['width'], $template['height']));
 
             return $pdf->Output('proof.pdf', 'S');
         }
@@ -43,23 +44,20 @@ class PdfRenderer
         $template = config("cards.templates.$key");
         abort_unless($template, 422, 'Неизвестный бланк.');
         $pdf = $this->document(['width' => 210, 'height' => 297]);
-        $pdf->SetTitle('Два пробных бланка А5 на листе А4');
-        foreach ([0, 148] as $top) {
-            $pdf->Image(resource_path($template['preview_image']), 0, $top, 210, 148);
-            $pdf->SetFont('liberationserif', 'B', 10, resource_path('fonts/liberationserifb.json'));
-            $pdf->SetXY(8, $top + 12);
-            $pdf->Cell(190, 5, 'ПРОБНЫЙ БЛАНК '.$template['series'].' · А5 · 210 × 148 мм', 0, 0, 'C');
-            $pdf->SetXY(8, $top + 20);
-            $pdf->Cell(190, 5, 'Печатайте на А4 в масштабе 100%. Разрежьте по пунктиру.', 0, 0, 'C');
-        }
+        $pdf->SetTitle('Пробный бланк на листе А4');
+        $pdf->setViewerPreferences(['PrintScaling' => 'None']);
+        $width = $template['width'];
+        $height = $template['height'];
+        $pdf->Image(resource_path($template['preview_image']), 0, 0, $width, $template['scan_height']);
+        $pdf->SetFont('liberationserif', 'B', 10, resource_path('fonts/liberationserifb.json'));
+        $pdf->SetXY(8, 12);
+        $pdf->Cell($width - 16, 5, sprintf('ПРОБНЫЙ БЛАНК %s · %d × %d мм', $template['series'], $width, $height), 0, 0, 'C');
         $pdf->SetLineStyle(['width' => 0.25, 'dash' => '2,2', 'color' => [60, 70, 80]]);
-        $pdf->Line(0, 148, 210, 148);
-        $pdf->Line(0, 296, 210, 296);
-        // Marks remain visible on printers with non-printable edge margins.
-        foreach ([0, 148] as $top) {
-            $pdf->SetXY(8, $top + 28);
-            $pdf->Cell(190, 5, 'Высота каждого листа — 148 мм. Нижнюю полоску 1 мм удалите.', 0, 0, 'C');
-        }
+        $pdf->Line(0, $height, $width, $height);
+        $pdf->SetXY(8, $height + 4);
+        $pdf->Cell($width - 16, 5, sprintf('Линия отреза · %d мм от верхнего края', $height), 0, 0, 'C');
+        $pdf->SetXY(8, $height + 12);
+        $pdf->Cell($width - 16, 5, 'Печатайте на А4 в масштабе 100%. Оставьте верхнюю часть листа.', 0, 0, 'C');
 
         return $pdf->Output('calibration-a4.pdf', 'S');
     }
@@ -167,7 +165,7 @@ class PdfRenderer
         try {
             imagefill($image, 0, 0, imagecolorallocate($image, 255, 255, 255));
             imagecopyresampled($image, $source, (int) round(-$cropX * $scale), (int) round(-$cropY * $scale), 0, 0,
-                (int) round($template['width'] * $scale), (int) round($template['height'] * $scale), imagesx($source), imagesy($source));
+                (int) round($template['width'] * $scale), (int) round($template['scan_height'] * $scale), imagesx($source), imagesy($source));
             $black = imagecolorallocate($image, 0, 0, 0);
             foreach ($layout as $line) {
                 $pdf->SetFont('liberationserif', 'B', $line['size'], resource_path('fonts/liberationserifb.json'));

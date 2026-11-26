@@ -18,7 +18,7 @@ class GdPreviewTest extends TestCase
             $size = getimagesizefromstring($png);
             $this->assertSame(IMAGETYPE_PNG, $size[2]);
             $this->assertSame(914, $size[0]);
-            $this->assertSame(556, $size[1]);
+            $this->assertSame(571, $size[1]);
             $shifted = $renderer->preview($key, CardInput::demo(), array_replace($settings, ['offset_x' => 2]));
             $this->assertNotSame($png, $shifted);
             if (getenv('PREVIEW_QA_DIR')) {
